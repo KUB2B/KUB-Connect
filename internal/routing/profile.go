@@ -7,6 +7,29 @@ const (
 	OutboundBlock  = "block"
 )
 
+// TelegramCIDRs are Telegram's officially published IP ranges (AS62014 /
+// AS62041). Baked in rather than relying on a "geoip:telegram" category,
+// which is absent from the canonical v2fly geoip.dat. This keeps Telegram
+// tunneling robust regardless of which geoip.dat the user ships.
+// Source: https://core.telegram.org/resources/cidr.txt
+var TelegramCIDRs = []string{
+	"91.105.192.0/23",
+	"91.108.4.0/22",
+	"91.108.8.0/22",
+	"91.108.12.0/22",
+	"91.108.16.0/22",
+	"91.108.20.0/22",
+	"91.108.56.0/22",
+	"95.161.64.0/20",
+	"149.154.160.0/20",
+	"185.76.151.0/24",
+	"2001:67c:4e8::/48",
+	"2001:b28:f23c::/48",
+	"2001:b28:f23d::/48",
+	"2001:b28:f23f::/48",
+	"2a0a:f280::/32",
+}
+
 // Profile is the user's whitelist routing choices.
 type Profile struct {
 	Telegram           bool
@@ -40,7 +63,7 @@ func (p Profile) Rules() []Rule {
 	if p.Telegram {
 		rules = append(rules,
 			Rule{Outbound: OutboundProxy, Domains: []string{"geosite:telegram"}},
-			Rule{Outbound: OutboundProxy, IPs: []string{"geoip:telegram"}},
+			Rule{Outbound: OutboundProxy, IPs: TelegramCIDRs},
 		)
 	}
 	if len(p.CustomProxyDomains) > 0 {
