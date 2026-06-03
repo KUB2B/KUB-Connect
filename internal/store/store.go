@@ -1,0 +1,83 @@
+package store
+
+import (
+	"encoding/json"
+	"errors"
+	"io/fs"
+	"os"
+	"path/filepath"
+
+	"github.com/zki/vless-client/internal/routing"
+	"github.com/zki/vless-client/internal/vless"
+)
+
+// Mode is the traffic capture mode.
+type Mode string
+
+const (
+	ModeTUN   Mode = "tun"
+	ModeProxy Mode = "proxy"
+)
+
+// Settings holds app-level toggles.
+type Settings struct {
+	Mode        Mode `json:"mode"`
+	AutoStart   bool `json:"autoStart"`
+	AutoConnect bool `json:"autoConnect"`
+	KillSwitch  bool `json:"killSwitch"`
+}
+
+// State is the full persisted application state.
+type State struct {
+	Servers      []*vless.ServerConfig `json:"servers"`
+	ActiveServer int                   `json:"activeServer"`
+	Profile      routing.Profile       `json:"profile"`
+	Settings     Settings              `json:"settings"`
+}
+
+// DefaultState returns the initial state for a fresh install.
+func DefaultState() *State {
+	return &State{
+		Servers:      nil,
+		ActiveServer: -1,
+		Profile:      routing.Default(),
+		Settings:     Settings{Mode: ModeTUN},
+	}
+}
+
+// Save writes state to path as indented JSON, creating parent dirs.
+func Save(path string, s *State) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o600)
+}
+
+// Load reads state from path. A missing file yields DefaultState (no error).
+func Load(path string) (*State, error) {
+	data, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return DefaultState(), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var s State
+	if err := json.Unmarshal(data, &s); err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
+// DefaultPath returns the OS-appropriate state file location.
+func DefaultPath() (string, error) {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "vless-client", "state.json"), nil
+}
