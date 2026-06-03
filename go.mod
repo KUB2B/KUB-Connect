@@ -2,7 +2,11 @@ module github.com/zki/vless-client
 
 go 1.26.1
 
-require github.com/xtls/xray-core v1.260327.0
+require (
+	github.com/xtls/xray-core v1.260327.0
+	golang.org/x/sys v0.45.0
+	google.golang.org/protobuf v1.36.11
+)
 
 require (
 	github.com/andybalholm/brotli v1.0.6 // indirect
@@ -30,7 +34,6 @@ require (
 	golang.org/x/mod v0.33.0 // indirect
 	golang.org/x/net v0.52.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/text v0.35.0 // indirect
 	golang.org/x/time v0.12.0 // indirect
 	golang.org/x/tools v0.42.0 // indirect
@@ -38,7 +41,6 @@ require (
 	golang.zx2c4.com/wireguard v0.0.0-20250521234502-f333402bd9cb // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251202230838-ff82c1b0f217 // indirect
 	google.golang.org/grpc v1.79.3 // indirect
-	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gvisor.dev/gvisor v0.0.0-20260122175437-89a5d21be8f0 // indirect
 	lukechampine.com/blake3 v1.4.1 // indirect
