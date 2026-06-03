@@ -66,6 +66,7 @@ function render(st: State) {
   (<HTMLInputElement>$("tg-toggle")).checked = st.profile.telegram;
   (<HTMLInputElement>$("ru-toggle")).checked = st.profile.forceRUDirect;
   (<HTMLSelectElement>$("mode-select")).value = st.settings.mode;
+  (<HTMLInputElement>$("kill-toggle")).checked = st.settings.killSwitch;
 }
 
 let current: State;
@@ -109,6 +110,10 @@ function wire() {
   });
   $("mode-select").addEventListener("change", () => {
     current.settings.mode = (<HTMLSelectElement>$("mode-select")).value;
+    UpdateSettings(current.settings).catch((e) => ($("error-line").textContent = String(e)));
+  });
+  $("kill-toggle").addEventListener("change", () => {
+    current.settings.killSwitch = (<HTMLInputElement>$("kill-toggle")).checked;
     UpdateSettings(current.settings).catch((e) => ($("error-line").textContent = String(e)));
   });
   $("clear-logs-btn").addEventListener("click", () => {
