@@ -30,6 +30,7 @@
 **Ubuntu 24.04 note:** webkit2gtk-4.0 renamed to 4.1. Install `libgtk-3-dev libwebkit2gtk-4.1-dev pkg-config gcc`, then build with `-tags "wails webkit2_41"` (not just `-tags wails`).
 
 ## Deferred to Phase 4 (networking)
+- **Embed geosite.dat + geoip.dat in binary:** currently must copy manually to `build/bin/`. Solution: add `data/geosite.dat` + `data/geoip.dat` to repo, `//go:embed` in `gui_app.go`, extract to `os.MkdirTemp` on startup, set `XRAY_LOCATION_ASSET` env var before `app.New`. Eliminates manual dat copy on every build.
 - netcfg for darwin/windows; full default-route TUN with loop avoidance.
 - Wire TUN mode into the GUI connector (remove the proxy-only guard).
 - Supervise tun2socks `engine.Start/Stop` `log.Fatalf` (GUI must not be killed).
