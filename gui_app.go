@@ -11,6 +11,7 @@ import (
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/zki/vless-client/internal/app"
+	"github.com/zki/vless-client/internal/geoassets"
 	"github.com/zki/vless-client/internal/privilege"
 	"github.com/zki/vless-client/internal/store"
 )
@@ -32,6 +33,18 @@ func NewApp() *App { return &App{} }
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+
+	// Extract embedded geo databases and point xray-core at them, unless the
+	// environment already overrides the location (useful for dev).
+	if os.Getenv("XRAY_LOCATION_ASSET") == "" {
+		if dir, err := geoassets.DefaultDir(); err != nil {
+			log.Printf("geo asset dir: %v", err)
+		} else if err := geoassets.Sync(geoAssets, "data", dir, []string{"geoip.dat", "geosite.dat"}); err != nil {
+			log.Printf("geo assets: %v", err)
+		} else {
+			_ = os.Setenv("XRAY_LOCATION_ASSET", dir)
+		}
+	}
 
 	statePath, err := store.DefaultPath()
 	if err != nil {

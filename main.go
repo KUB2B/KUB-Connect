@@ -13,6 +13,12 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+// geoAssets carries the geoip.dat/geosite.dat databases xray-core needs for
+// geoip:/geosite: routing rules. Extracted to disk on startup (see startup).
+//
+//go:embed data/geoip.dat data/geosite.dat
+var geoAssets embed.FS
+
 func main() {
 	a := NewApp()
 	err := wails.Run(&options.App{
