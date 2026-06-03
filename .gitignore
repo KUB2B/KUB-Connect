@@ -1,0 +1,10 @@
+# Go
+*.exe
+*.test
+*.out
+/build/bin/
+# Wails
+frontend/node_modules/
+frontend/dist/
+# OS
+.DS_Store
