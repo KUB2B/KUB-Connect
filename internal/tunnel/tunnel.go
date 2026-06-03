@@ -6,6 +6,7 @@ package tunnel
 import (
 	"fmt"
 
+	"github.com/zki/vless-client/internal/firewall"
 	"github.com/zki/vless-client/internal/netcfg"
 	"github.com/zki/vless-client/internal/store"
 )
@@ -34,10 +35,11 @@ type Tun interface {
 
 // Deps are the injected platform dependencies.
 type Deps struct {
-	Core   Core
-	Proxy  Proxy
-	Tun    Tun
-	Router netcfg.Router
+	Core     Core
+	Proxy    Proxy
+	Tun      Tun
+	Router   netcfg.Router
+	Firewall firewall.Firewall
 }
 
 // Config describes one tunnel session.
@@ -50,6 +52,7 @@ type Config struct {
 	TunIP      string
 	TunPrefix  int
 	RouteCIDRs []string
+	KillSwitch bool
 }
 
 // Tunnel is a configured, possibly-running capture session.
@@ -104,6 +107,15 @@ func (t *Tunnel) Start() error {
 			t.inst = nil
 			return fmt.Errorf("apply routes: %w", err)
 		}
+		if t.cfg.KillSwitch {
+			if err := t.deps.Firewall.On(firewall.Config{Device: t.cfg.Device, CIDRs: t.cfg.RouteCIDRs}); err != nil {
+				_ = t.deps.Router.Down(t.netcfgConfig())
+				_ = t.deps.Tun.Stop()
+				_ = t.inst.Stop()
+				t.inst = nil
+				return fmt.Errorf("enable kill switch: %w", err)
+			}
+		}
 	default:
 		_ = t.inst.Stop()
 		t.inst = nil
@@ -126,6 +138,9 @@ func (t *Tunnel) Stop() error {
 	case store.ModeProxy:
 		record(t.deps.Proxy.Clear())
 	case store.ModeTUN:
+		if t.cfg.KillSwitch {
+			record(t.deps.Firewall.Off())
+		}
 		record(t.deps.Router.Down(t.netcfgConfig()))
 		record(t.deps.Tun.Stop())
 	}
