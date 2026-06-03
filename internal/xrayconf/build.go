@@ -10,7 +10,8 @@ import (
 
 // Options holds runtime knobs for the generated config.
 type Options struct {
-	SocksPort int // local SOCKS inbound port (e.g. 10808)
+	SocksPort int    // local SOCKS inbound port (e.g. 10808)
+	LogFile   string // optional path for xray's error log (empty = stdout/default)
 }
 
 type xrayConfig struct {
@@ -23,6 +24,7 @@ type xrayConfig struct {
 
 type logConf struct {
 	LogLevel string `json:"loglevel"`
+	Error    string `json:"error,omitempty"`
 }
 
 type dnsConf struct {
@@ -115,7 +117,7 @@ func Build(s *vless.ServerConfig, p routing.Profile, opts Options) ([]byte, erro
 	}
 
 	cfg := xrayConfig{
-		Log: logConf{LogLevel: "warning"},
+		Log: logConf{LogLevel: "warning", Error: opts.LogFile},
 		DNS: dnsConf{Servers: []any{"1.1.1.1", "localhost"}},
 		Inbounds: []inbound{{
 			Tag:      "socks-in",
