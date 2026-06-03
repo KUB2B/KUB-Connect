@@ -47,6 +47,7 @@ type ConnConfig struct {
 	TunIP      string
 	TunPrefix  int
 	RouteCIDRs []string
+	KillSwitch bool
 }
 
 // TUN device defaults. 198.18.0.0/15 is the benchmarking range (RFC 2544),

@@ -78,7 +78,11 @@ func (s *Service) Connect() error {
 		cc.TunIP = tunIP
 		cc.TunPrefix = tunPrefix
 		cc.RouteCIDRs = tunRouteCIDRs(s.state.Profile)
+		cc.KillSwitch = s.state.Settings.KillSwitch
 		s.bus.Append("note: TUN mode routes whitelisted IPs only; geosite domains are not host-routed")
+		if cc.KillSwitch {
+			s.bus.Append("note: kill switch active — whitelisted IPs are blocked if they leave the TUN")
+		}
 	}
 
 	conn, err := s.deps.Factory(cc)

@@ -101,6 +101,37 @@ func TestConnectTUNHappyPath(t *testing.T) {
 	}
 }
 
+func TestConnectTUNPassesKillSwitch(t *testing.T) {
+	svc, _, _, captured := testDeps(t) // elevated, default Mode=tun
+	mustAdd(t, svc, sampleLink)
+	if err := svc.UpdateSettings(SettingsDTO{Mode: "tun", KillSwitch: true}); err != nil {
+		t.Fatalf("UpdateSettings: %v", err)
+	}
+	if err := svc.UpdateProfile(ProfileDTO{Telegram: true}); err != nil {
+		t.Fatalf("UpdateProfile: %v", err)
+	}
+	if err := svc.Connect(); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	if !captured.KillSwitch {
+		t.Error("ConnConfig.KillSwitch should be true when setting is on in TUN mode")
+	}
+}
+
+func TestConnectProxyIgnoresKillSwitch(t *testing.T) {
+	svc, _, _, captured := testDeps(t)
+	mustAdd(t, svc, sampleLink)
+	if err := svc.UpdateSettings(SettingsDTO{Mode: "proxy", KillSwitch: true}); err != nil {
+		t.Fatalf("UpdateSettings: %v", err)
+	}
+	if err := svc.Connect(); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	if captured.KillSwitch {
+		t.Error("ConnConfig.KillSwitch must be false in proxy mode")
+	}
+}
+
 func TestConnectTUNRequiresElevation(t *testing.T) {
 	svc, _, _, _ := testDepsElevation(t, false)
 	mustAdd(t, svc, sampleLink)
