@@ -1,8 +1,6 @@
 package netcfg
 
 import (
-	"fmt"
-	"os/exec"
 	"strconv"
 )
 
@@ -35,14 +33,6 @@ func downCommands(c Config) [][]string {
 	return cmds
 }
 
-func runAll(cmds [][]string) error {
-	for _, cmd := range cmds {
-		if out, err := exec.Command(cmd[0], cmd[1:]...).CombinedOutput(); err != nil {
-			return fmt.Errorf("%v: %w: %s", cmd, err, out)
-		}
-	}
-	return nil
-}
 
 func (linuxRouter) Up(c Config) error   { return runAll(upCommands(c)) }
 func (linuxRouter) Down(c Config) error { return runAll(downCommands(c)) }
