@@ -31,6 +31,11 @@ func (f *fakeConnector) Stop() error  { f.stopped = true; return nil }
 // testDeps builds a Service backed by a temp dir, an always-elevated stub, and
 // a factory returning fc (recording the ConnConfig it was given).
 func testDeps(t *testing.T) (*Service, *fakeEmitter, *fakeConnector, *ConnConfig) {
+	return testDepsElevation(t, true)
+}
+
+// testDepsElevation is testDeps with a configurable privilege stub.
+func testDepsElevation(t *testing.T, elevated bool) (*Service, *fakeEmitter, *fakeConnector, *ConnConfig) {
 	t.Helper()
 	dir := t.TempDir()
 	em := &fakeEmitter{}
@@ -40,7 +45,7 @@ func testDeps(t *testing.T) (*Service, *fakeEmitter, *fakeConnector, *ConnConfig
 		StatePath: filepath.Join(dir, "state.json"),
 		LogDir:    dir,
 		Emitter:   em,
-		Elevated:  func() bool { return true },
+		Elevated:  func() bool { return elevated },
 		Factory: func(c ConnConfig) (Connector, error) {
 			captured = c
 			return fc, nil

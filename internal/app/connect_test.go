@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/zki/vless-client/internal/routing"
 	"github.com/zki/vless-client/internal/store"
 )
 
@@ -74,13 +75,68 @@ func TestConnectFactoryFailureGoesToError(t *testing.T) {
 	}
 }
 
-func TestConnectTUNModeRejectedThisPhase(t *testing.T) {
-	svc, _, _, _ := testDeps(t)
+func TestConnectTUNHappyPath(t *testing.T) {
+	svc, _, fc, captured := testDeps(t) // elevated, default Mode=tun
 	mustAdd(t, svc, sampleLink)
-	// state default Mode is tun; do not switch.
-	if err := svc.Connect(); err == nil {
-		t.Error("TUN mode should be rejected in Phase 3")
+	if err := svc.UpdateProfile(ProfileDTO{Telegram: true, CustomProxyIPs: []string{"203.0.113.0/24"}}); err != nil {
+		t.Fatalf("UpdateProfile: %v", err)
 	}
+	if err := svc.Connect(); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	if !fc.started {
+		t.Error("connector should have been started")
+	}
+	if captured.Mode != store.ModeTUN {
+		t.Errorf("Mode = %q, want tun", captured.Mode)
+	}
+	if captured.Device == "" || captured.TunIP == "" || captured.TunPrefix == 0 {
+		t.Errorf("TUN params unset: %+v", *captured)
+	}
+	if !sliceContains(captured.RouteCIDRs, routing.TelegramCIDRs[0]) {
+		t.Errorf("RouteCIDRs missing telegram CIDRs: %v", captured.RouteCIDRs)
+	}
+	if !sliceContains(captured.RouteCIDRs, "203.0.113.0/24") {
+		t.Errorf("RouteCIDRs missing custom IP: %v", captured.RouteCIDRs)
+	}
+}
+
+func TestConnectTUNRequiresElevation(t *testing.T) {
+	svc, _, _, _ := testDepsElevation(t, false)
+	mustAdd(t, svc, sampleLink)
+	// default Mode=tun
+	if err := svc.Connect(); err == nil {
+		t.Error("TUN mode without elevation should error")
+	}
+	if svc.GetState().Conn != string(ConnDisconnected) {
+		t.Error("failed Connect must remain disconnected")
+	}
+}
+
+func TestConnectTUNExcludesTelegramWhenDisabled(t *testing.T) {
+	svc, _, _, captured := testDeps(t)
+	mustAdd(t, svc, sampleLink)
+	if err := svc.UpdateProfile(ProfileDTO{Telegram: false, CustomProxyIPs: []string{"203.0.113.0/24"}}); err != nil {
+		t.Fatalf("UpdateProfile: %v", err)
+	}
+	if err := svc.Connect(); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	if sliceContains(captured.RouteCIDRs, routing.TelegramCIDRs[0]) {
+		t.Errorf("telegram CIDRs should be absent when Telegram off: %v", captured.RouteCIDRs)
+	}
+	if !sliceContains(captured.RouteCIDRs, "203.0.113.0/24") {
+		t.Errorf("custom IP should still be present: %v", captured.RouteCIDRs)
+	}
+}
+
+func sliceContains(s []string, want string) bool {
+	for _, v := range s {
+		if v == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestDisconnectStopsConnector(t *testing.T) {

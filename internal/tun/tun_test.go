@@ -11,6 +11,30 @@ func TestStartRequiresProxyURL(t *testing.T) {
 	}
 }
 
+func TestValidateArgs(t *testing.T) {
+	tests := []struct {
+		name     string
+		device   string
+		socksURL string
+		wantErr  bool
+	}{
+		{"valid", "tun0", "socks5://127.0.0.1:10808", false},
+		{"empty device", "", "socks5://127.0.0.1:10808", true},
+		{"empty url", "tun0", "", true},
+		{"unparseable url", "tun0", "://bad", true},
+		{"wrong scheme", "tun0", "http://127.0.0.1:10808", true},
+		{"no host", "tun0", "socks5://", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateArgs(tt.device, tt.socksURL)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateArgs(%q,%q) err=%v, wantErr=%v", tt.device, tt.socksURL, err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestStartStopLinux(t *testing.T) {
 	if os.Geteuid() != 0 {
 		t.Skip("creating a TUN device requires root; skipping")

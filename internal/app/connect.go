@@ -7,9 +7,22 @@ import (
 	"time"
 
 	"github.com/zki/vless-client/internal/logbus"
+	"github.com/zki/vless-client/internal/routing"
 	"github.com/zki/vless-client/internal/store"
 	"github.com/zki/vless-client/internal/xrayconf"
 )
+
+// tunRouteCIDRs is the set of destination IP CIDRs steered into the TUN under
+// the selective host-route model: Telegram's published ranges (when enabled)
+// plus the user's custom proxy IPs. Domain-based rules cannot be host-routed.
+func tunRouteCIDRs(p routing.Profile) []string {
+	var cidrs []string
+	if p.Telegram {
+		cidrs = append(cidrs, routing.TelegramCIDRs...)
+	}
+	cidrs = append(cidrs, p.CustomProxyIPs...)
+	return cidrs
+}
 
 // xrayLogPath is where xray writes its error log, tailed into the log bus.
 func (s *Service) xrayLogPath() string {
@@ -36,8 +49,8 @@ func (s *Service) Connect() error {
 		return fmt.Errorf("no active server selected")
 	}
 	mode := s.state.Settings.Mode
-	if mode != store.ModeProxy {
-		return fmt.Errorf("mode %q is not available yet (Phase 3 supports proxy mode only)", mode)
+	if mode == store.ModeTUN && !s.deps.Elevated() {
+		return fmt.Errorf("TUN mode requires administrator/root privileges")
 	}
 
 	srv := s.state.Servers[s.state.ActiveServer]
@@ -54,12 +67,21 @@ func (s *Service) Connect() error {
 		return fmt.Errorf("build config: %w", err)
 	}
 
-	conn, err := s.deps.Factory(ConnConfig{
+	cc := ConnConfig{
 		XrayJSON:  cfgJSON,
 		SocksHost: "127.0.0.1",
 		SocksPort: socksPort,
 		Mode:      mode,
-	})
+	}
+	if mode == store.ModeTUN {
+		cc.Device = tunDevice
+		cc.TunIP = tunIP
+		cc.TunPrefix = tunPrefix
+		cc.RouteCIDRs = tunRouteCIDRs(s.state.Profile)
+		s.bus.Append("note: TUN mode routes whitelisted IPs only; geosite domains are not host-routed")
+	}
+
+	conn, err := s.deps.Factory(cc)
 	if err != nil {
 		s.setConn(ConnError, err.Error())
 		s.bus.Append("error: " + err.Error())

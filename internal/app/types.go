@@ -36,13 +36,26 @@ type Connector interface {
 	Stop() error
 }
 
-// ConnConfig is what the service hands the factory to build a Connector.
+// ConnConfig is what the service hands the factory to build a Connector. The
+// Device/TunIP/TunPrefix/RouteCIDRs fields are populated for TUN mode only.
 type ConnConfig struct {
-	XrayJSON  []byte
-	SocksHost string
-	SocksPort int
-	Mode      store.Mode
+	XrayJSON   []byte
+	SocksHost  string
+	SocksPort  int
+	Mode       store.Mode
+	Device     string
+	TunIP      string
+	TunPrefix  int
+	RouteCIDRs []string
 }
+
+// TUN device defaults. 198.18.0.0/15 is the benchmarking range (RFC 2544),
+// unlikely to collide with real destinations.
+const (
+	tunDevice = "tun0"
+	tunIP     = "198.18.0.1"
+	tunPrefix = 15
+)
 
 // ConnectorFactory builds a Connector for a session. The Wails layer supplies
 // the real (proxy-mode) implementation; tests supply a fake.
