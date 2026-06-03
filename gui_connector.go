@@ -7,6 +7,7 @@ import (
 
 	"github.com/zki/vless-client/internal/app"
 	"github.com/zki/vless-client/internal/core"
+	"github.com/zki/vless-client/internal/firewall"
 	"github.com/zki/vless-client/internal/netcfg"
 	"github.com/zki/vless-client/internal/store"
 	"github.com/zki/vless-client/internal/sysproxy"
@@ -35,7 +36,7 @@ func newConnector(c app.ConnConfig) (app.Connector, error) {
 		SocksPort: c.SocksPort,
 		Mode:      c.Mode,
 	}
-	deps := tunnel.Deps{Core: coreAdapter{}}
+	deps := tunnel.Deps{Core: coreAdapter{}, Firewall: firewall.New()}
 
 	switch c.Mode {
 	case store.ModeProxy:
@@ -45,6 +46,7 @@ func newConnector(c app.ConnConfig) (app.Connector, error) {
 		cfg.TunIP = c.TunIP
 		cfg.TunPrefix = c.TunPrefix
 		cfg.RouteCIDRs = c.RouteCIDRs
+		cfg.KillSwitch = c.KillSwitch
 		deps.Tun = tunAdapter{}
 		deps.Router = netcfg.New()
 	default:
