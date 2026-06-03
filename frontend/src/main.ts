@@ -1,49 +1,129 @@
-import './style.css';
-import './app.css';
+import "./style.css";
+import {
+  GetState,
+  AddServer,
+  RemoveServer,
+  SetActiveServer,
+  UpdateProfile,
+  UpdateSettings,
+  Connect,
+  Disconnect,
+  Logs,
+} from "../wailsjs/go/main/App";
+import { EventsOn } from "../wailsjs/runtime";
 
-import logo from './assets/images/logo-universal.png';
-import {Greet} from '../wailsjs/go/main/App';
-
-// Setup the greet function
-window.greet = function () {
-    // Get name
-    let name = nameElement!.value;
-
-    // Check if the input is empty
-    if (name === "") return;
-
-    // Call App.Greet(name)
-    try {
-        Greet(name)
-            .then((result) => {
-                // Update result with data back from App.Greet()
-                resultElement!.innerText = result;
-            })
-            .catch((err) => {
-                console.error(err);
-            });
-    } catch (err) {
-        console.error(err);
-    }
+type Profile = {
+  telegram: boolean;
+  forceRUDirect: boolean;
+  customProxyDomains: string[];
+  customProxyIPs: string[];
+};
+type Settings = {
+  mode: string;
+  autoConnect: boolean;
+  autoStart: boolean;
+  killSwitch: boolean;
+};
+type Server = { name: string; host: string; port: number; security: string; network: string };
+type State = {
+  servers: Server[];
+  activeServer: number;
+  profile: Profile;
+  settings: Settings;
+  conn: string;
+  lastError: string;
 };
 
-document.querySelector('#app')!.innerHTML = `
-    <img id="logo" class="logo">
-      <div class="result" id="result">Please enter your name below 👇</div>
-      <div class="input-box" id="input">
-        <input class="input" id="name" type="text" autocomplete="off" />
-        <button class="btn" onclick="greet()">Greet</button>
-      </div>
-    </div>
-`;
-(document.getElementById('logo') as HTMLImageElement).src = logo;
+const $ = (id: string) => document.getElementById(id)!;
 
-let nameElement = (document.getElementById("name") as HTMLInputElement);
-nameElement.focus();
-let resultElement = document.getElementById("result");
+function render(st: State) {
+  const pill = $("status-pill");
+  pill.textContent = st.conn;
+  pill.className = "pill " + st.conn;
 
-declare global {
-    interface Window {
-        greet: () => void;
-    }
+  $("active-server").textContent =
+    st.activeServer >= 0 && st.servers[st.activeServer]
+      ? st.servers[st.activeServer].name
+      : "—";
+  $("error-line").textContent = st.lastError || "";
+
+  const list = $("server-list");
+  list.innerHTML = "";
+  st.servers.forEach((s, i) => {
+    const li = document.createElement("li");
+    li.className = i === st.activeServer ? "active" : "";
+    li.innerHTML = `<span>${s.name} (${s.host}:${s.port})</span>`;
+    const sel = document.createElement("button");
+    sel.textContent = "Select";
+    sel.onclick = () => SetActiveServer(i);
+    const del = document.createElement("button");
+    del.textContent = "Delete";
+    del.onclick = () => RemoveServer(i);
+    li.append(sel, del);
+    list.append(li);
+  });
+
+  (<HTMLInputElement>$("tg-toggle")).checked = st.profile.telegram;
+  (<HTMLInputElement>$("ru-toggle")).checked = st.profile.forceRUDirect;
+  (<HTMLSelectElement>$("mode-select")).value = st.settings.mode;
 }
+
+let current: State;
+
+function refresh() {
+  GetState().then((st) => {
+    current = st as State;
+    render(current);
+  });
+}
+
+function appendLog(line: string) {
+  const view = $("log-view");
+  view.textContent += line + "\n";
+  view.scrollTop = view.scrollHeight;
+}
+
+function wire() {
+  $("connect-btn").addEventListener("click", () => {
+    Connect().catch((e) => ($("error-line").textContent = String(e)));
+  });
+  $("disconnect-btn").addEventListener("click", () => {
+    Disconnect().catch((e) => ($("error-line").textContent = String(e)));
+  });
+  $("add-server-btn").addEventListener("click", () => {
+    const input = <HTMLInputElement>$("link-input");
+    AddServer(input.value)
+      .then(() => {
+        input.value = "";
+        $("link-error").textContent = "";
+      })
+      .catch((e) => ($("link-error").textContent = String(e)));
+  });
+  $("tg-toggle").addEventListener("change", () => {
+    current.profile.telegram = (<HTMLInputElement>$("tg-toggle")).checked;
+    UpdateProfile(current.profile);
+  });
+  $("ru-toggle").addEventListener("change", () => {
+    current.profile.forceRUDirect = (<HTMLInputElement>$("ru-toggle")).checked;
+    UpdateProfile(current.profile);
+  });
+  $("mode-select").addEventListener("change", () => {
+    current.settings.mode = (<HTMLSelectElement>$("mode-select")).value;
+    UpdateSettings(current.settings).catch((e) => ($("error-line").textContent = String(e)));
+  });
+  $("clear-logs-btn").addEventListener("click", () => {
+    $("log-view").textContent = "";
+  });
+
+  EventsOn("state", (st: State) => {
+    current = st;
+    render(st);
+  });
+  EventsOn("log", (line: string) => appendLog(line));
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  wire();
+  refresh();
+  Logs().then((lines) => (lines as string[]).forEach(appendLog));
+});

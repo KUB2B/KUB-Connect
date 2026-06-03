@@ -1,12 +1,54 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8"/>
-    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-    <title>vlessgui</title>
-</head>
-<body>
-<div id="app"></div>
-<script src="./src/main.ts" type="module"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VLESS Client</title>
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <h1>VLESS Client</h1>
+        <div id="status-pill" class="pill disconnected">disconnected</div>
+      </header>
+
+      <section id="status">
+        <p>Active server: <span id="active-server">—</span></p>
+        <button id="connect-btn">Connect</button>
+        <button id="disconnect-btn">Disconnect</button>
+        <p id="error-line" class="error"></p>
+      </section>
+
+      <section id="servers">
+        <h2>Servers</h2>
+        <div class="row">
+          <input id="link-input" type="text" placeholder="vless://..." />
+          <button id="add-server-btn">Add</button>
+        </div>
+        <p id="link-error" class="error"></p>
+        <ul id="server-list"></ul>
+      </section>
+
+      <section id="routing">
+        <h2>Routing</h2>
+        <label><input type="checkbox" id="tg-toggle" /> Telegram → VPN</label>
+        <label><input type="checkbox" id="ru-toggle" /> Force RU direct</label>
+        <div class="row">
+          <label>Mode:
+            <select id="mode-select">
+              <option value="proxy">Proxy (system SOCKS)</option>
+              <option value="tun">TUN (Phase 4 — disabled)</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <section id="logs">
+        <h2>Logs</h2>
+        <button id="clear-logs-btn">Clear</button>
+        <pre id="log-view"></pre>
+      </section>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
 </html>
