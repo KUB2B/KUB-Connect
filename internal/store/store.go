@@ -19,6 +19,26 @@ const (
 	ModeProxy Mode = "proxy"
 )
 
+// Log verbosity levels. Values are xray-native (also valid tun2socks engine
+// levels) so they map straight through with no translation.
+const (
+	LogQuiet   = "error"   // UI: Тихо
+	LogNormal  = "warning" // UI: Обычный (default)
+	LogVerbose = "debug"   // UI: Подробно
+)
+
+// NormalizeLogLevel returns level if supported, otherwise LogNormal. Empty or
+// unknown values (including state files written before this field existed) fall
+// back to warning.
+func NormalizeLogLevel(level string) string {
+	switch level {
+	case LogQuiet, LogNormal, LogVerbose:
+		return level
+	default:
+		return LogNormal
+	}
+}
+
 // Settings holds app-level toggles.
 type Settings struct {
 	Mode        Mode `json:"mode"`
@@ -31,6 +51,9 @@ type Settings struct {
 	// which is incompatible with mux). Off by default; safe only when the server
 	// side matches.
 	Mux bool `json:"mux"`
+	// LogLevel is the xray-native log verbosity (error/warning/debug). See the
+	// Log* constants. Drives both xray's log.loglevel and the tun2socks engine.
+	LogLevel string `json:"logLevel"`
 }
 
 // State is the full persisted application state.
@@ -47,7 +70,7 @@ func DefaultState() *State {
 		Servers:      nil,
 		ActiveServer: -1,
 		Profile:      routing.Default(),
-		Settings:     Settings{Mode: ModeTUN},
+		Settings:     Settings{Mode: ModeTUN, LogLevel: LogNormal},
 	}
 }
 
@@ -76,6 +99,7 @@ func Load(path string) (*State, error) {
 	if err := json.Unmarshal(data, &s); err != nil {
 		return nil, err
 	}
+	s.Settings.LogLevel = NormalizeLogLevel(s.Settings.LogLevel)
 	return &s, nil
 }
 

@@ -1,6 +1,7 @@
 package store
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -35,6 +36,43 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 	}
 	if out.Settings.Mode != ModeTUN || !out.Settings.KillSwitch {
 		t.Errorf("settings round-trip failed: %+v", out.Settings)
+	}
+}
+
+func TestNormalizeLogLevel(t *testing.T) {
+	cases := map[string]string{
+		"error":   "error",
+		"warning": "warning",
+		"debug":   "debug",
+		"":        "warning",
+		"bogus":   "warning",
+		"info":    "warning",
+	}
+	for in, want := range cases {
+		if got := NormalizeLogLevel(in); got != want {
+			t.Errorf("NormalizeLogLevel(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestLoadMigratesMissingLogLevel(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "state.json")
+	if err := os.WriteFile(path, []byte(`{"settings":{"mode":"tun"}}`), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	s, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if s.Settings.LogLevel != LogNormal {
+		t.Errorf("LogLevel = %q, want %q", s.Settings.LogLevel, LogNormal)
+	}
+}
+
+func TestDefaultStateLogLevel(t *testing.T) {
+	if got := DefaultState().Settings.LogLevel; got != LogNormal {
+		t.Errorf("default LogLevel = %q, want %q", got, LogNormal)
 	}
 }
 
