@@ -90,6 +90,7 @@ func (s *Service) Connect() error {
 	cfgJSON, err := xrayconf.Build(srv, s.state.Profile, xrayconf.Options{
 		SocksPort: socksPort,
 		LogFile:   s.xrayLogPath(),
+		LogLevel:  s.state.Settings.LogLevel,
 		// Mux tames the Telegram connection storm. It drops the xtls-rprx-vision
 		// flow, so it only works when the server's client is configured with no
 		// flow. User-gated to avoid breaking vision-only servers.
@@ -106,6 +107,7 @@ func (s *Service) Connect() error {
 		SocksHost: "127.0.0.1",
 		SocksPort: socksPort,
 		Mode:      mode,
+		LogLevel:  s.state.Settings.LogLevel,
 	}
 	if mode == store.ModeTUN {
 		cc.Device = tunDevice

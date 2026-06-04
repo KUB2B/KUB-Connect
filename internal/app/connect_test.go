@@ -220,6 +220,24 @@ func sliceContains(s []string, want string) bool {
 	return false
 }
 
+func TestConnectPassesLogLevel(t *testing.T) {
+	svc, _, _, captured := testDeps(t) // elevated, default Mode=tun
+	mustAdd(t, svc, sampleLink)
+	if err := svc.UpdateSettings(SettingsDTO{Mode: "tun", LogLevel: "debug"}); err != nil {
+		t.Fatalf("UpdateSettings: %v", err)
+	}
+	if err := svc.Connect(); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	if captured.LogLevel != "debug" {
+		t.Errorf("ConnConfig.LogLevel = %q, want debug", captured.LogLevel)
+	}
+	if !strings.Contains(string(captured.XrayJSON), `"loglevel": "debug"`) &&
+		!strings.Contains(string(captured.XrayJSON), `"loglevel":"debug"`) {
+		t.Errorf("xray JSON missing debug loglevel: %s", captured.XrayJSON)
+	}
+}
+
 func TestDisconnectStopsConnector(t *testing.T) {
 	svc, _, fc, _ := connectReadyService(t)
 	if err := svc.Connect(); err != nil {
