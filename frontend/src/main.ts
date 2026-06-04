@@ -24,6 +24,7 @@ type Settings = {
   autoStart: boolean;
   killSwitch: boolean;
   mux: boolean;
+  logLevel: string;
 };
 type Server = { name: string; host: string; port: number; security: string; network: string };
 type State = {
@@ -37,30 +38,66 @@ type State = {
 
 const $ = (id: string) => document.getElementById(id)!;
 
-function render(st: State) {
-  const pill = $("status-pill");
-  pill.textContent = st.conn;
-  pill.className = "pill " + st.conn;
+const STATUS: Record<string, string> = {
+  connected: "Подключено",
+  connecting: "Подключение…",
+  disconnecting: "Отключение…",
+  disconnected: "Отключено",
+  error: "Ошибка",
+};
 
-  $("active-server").textContent =
-    st.activeServer >= 0 && st.servers[st.activeServer]
-      ? st.servers[st.activeServer].name
-      : "—";
+let current: State;
+
+function setTab(name: string) {
+  document.querySelectorAll<HTMLElement>(".tab").forEach((b) => {
+    b.classList.toggle("active", b.dataset.tab === name);
+  });
+  document.querySelectorAll<HTMLElement>(".tab-panel").forEach((p) => {
+    p.classList.toggle("hidden", p.id !== "tab-" + name);
+  });
+}
+
+function render(st: State) {
+  // Power button: color from conn state.
+  const btn = $("power-btn");
+  btn.className = "power " + st.conn;
+  $("status-text").textContent = STATUS[st.conn] ?? st.conn;
   $("error-line").textContent = st.lastError || "";
 
+  // Active-server selector on Главная.
+  const sel = <HTMLSelectElement>$("server-select");
+  sel.innerHTML = "";
+  if (st.servers.length === 0) {
+    const opt = document.createElement("option");
+    opt.textContent = "Нет серверов — добавьте в Настройках";
+    opt.value = "-1";
+    sel.append(opt);
+    sel.disabled = true;
+  } else {
+    sel.disabled = false;
+    st.servers.forEach((s, i) => {
+      const opt = document.createElement("option");
+      opt.value = String(i);
+      opt.textContent = `${s.name} (${s.host}:${s.port})`;
+      sel.append(opt);
+    });
+    sel.value = String(st.activeServer);
+  }
+
+  // Server list on Настройки.
   const list = $("server-list");
   list.innerHTML = "";
   st.servers.forEach((s, i) => {
     const li = document.createElement("li");
     li.className = i === st.activeServer ? "active" : "";
     li.innerHTML = `<span>${s.name} (${s.host}:${s.port})</span>`;
-    const sel = document.createElement("button");
-    sel.textContent = "Select";
-    sel.onclick = () => SetActiveServer(i);
+    const pick = document.createElement("button");
+    pick.textContent = "Выбрать";
+    pick.onclick = () => SetActiveServer(i);
     const del = document.createElement("button");
-    del.textContent = "Delete";
+    del.textContent = "Удалить";
     del.onclick = () => RemoveServer(i);
-    li.append(sel, del);
+    li.append(pick, del);
     list.append(li);
   });
 
@@ -69,9 +106,8 @@ function render(st: State) {
   (<HTMLSelectElement>$("mode-select")).value = st.settings.mode;
   (<HTMLInputElement>$("kill-toggle")).checked = st.settings.killSwitch;
   (<HTMLInputElement>$("mux-toggle")).checked = st.settings.mux;
+  (<HTMLSelectElement>$("loglevel-select")).value = st.settings.logLevel || "warning";
 }
-
-let current: State;
 
 function refresh() {
   GetState().then((st) => {
@@ -86,13 +122,32 @@ function appendLog(line: string) {
   view.scrollTop = view.scrollHeight;
 }
 
+function pushSettings() {
+  UpdateSettings(current.settings).catch((e) => ($("error-line").textContent = String(e)));
+}
+
 function wire() {
-  $("connect-btn").addEventListener("click", () => {
-    Connect().catch((e) => ($("error-line").textContent = String(e)));
+  // Tabs
+  document.querySelectorAll<HTMLElement>(".tab").forEach((b) => {
+    b.addEventListener("click", () => setTab(b.dataset.tab!));
   });
-  $("disconnect-btn").addEventListener("click", () => {
-    Disconnect().catch((e) => ($("error-line").textContent = String(e)));
+
+  // Power button: toggle based on current state.
+  $("power-btn").addEventListener("click", () => {
+    const c = current?.conn;
+    if (c === "connected") {
+      Disconnect().catch((e) => ($("error-line").textContent = String(e)));
+    } else if (c === "disconnected" || c === "error") {
+      Connect().catch((e) => ($("error-line").textContent = String(e)));
+    }
+    // connecting/disconnecting: ignore.
   });
+
+  $("server-select").addEventListener("change", () => {
+    const v = parseInt((<HTMLSelectElement>$("server-select")).value, 10);
+    if (v >= 0) SetActiveServer(v);
+  });
+
   $("add-server-btn").addEventListener("click", () => {
     const input = <HTMLInputElement>$("link-input");
     AddServer(input.value)
@@ -102,6 +157,7 @@ function wire() {
       })
       .catch((e) => ($("link-error").textContent = String(e)));
   });
+
   $("tg-toggle").addEventListener("change", () => {
     current.profile.telegram = (<HTMLInputElement>$("tg-toggle")).checked;
     UpdateProfile(current.profile);
@@ -112,15 +168,19 @@ function wire() {
   });
   $("mode-select").addEventListener("change", () => {
     current.settings.mode = (<HTMLSelectElement>$("mode-select")).value;
-    UpdateSettings(current.settings).catch((e) => ($("error-line").textContent = String(e)));
+    pushSettings();
   });
   $("kill-toggle").addEventListener("change", () => {
     current.settings.killSwitch = (<HTMLInputElement>$("kill-toggle")).checked;
-    UpdateSettings(current.settings).catch((e) => ($("error-line").textContent = String(e)));
+    pushSettings();
   });
   $("mux-toggle").addEventListener("change", () => {
     current.settings.mux = (<HTMLInputElement>$("mux-toggle")).checked;
-    UpdateSettings(current.settings).catch((e) => ($("error-line").textContent = String(e)));
+    pushSettings();
+  });
+  $("loglevel-select").addEventListener("change", () => {
+    current.settings.logLevel = (<HTMLSelectElement>$("loglevel-select")).value;
+    pushSettings();
   });
   $("clear-logs-btn").addEventListener("click", () => {
     $("log-view").textContent = "";
