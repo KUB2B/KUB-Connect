@@ -12,6 +12,14 @@ import (
 type Options struct {
 	SocksPort int    // local SOCKS inbound port (e.g. 10808)
 	LogFile   string // optional path for xray's error log (empty = stdout/default)
+	// Mux multiplexes many proxied streams over a few real connections to the
+	// server. Telegram opens dozens of sockets in parallel; without mux each is a
+	// separate Reality handshake to the server, and the burst gets dropped (DPI /
+	// rate limiting), collapsing throughput. Mux is incompatible with the
+	// xtls-rprx-vision flow, so enabling it drops the vision flow from the
+	// outbound — the server's client must be configured with no flow (Reality
+	// still applies) for the handshake to match.
+	Mux bool
 }
 
 type xrayConfig struct {
@@ -48,6 +56,13 @@ type socksSettings struct {
 type sniffing struct {
 	Enabled      bool     `json:"enabled"`
 	DestOverride []string `json:"destOverride"`
+	// RouteOnly uses the sniffed domain for routing decisions only, keeping the
+	// original destination address for the outbound connection. Without it,
+	// sniffing overrides the destination with the sniffed domain, which breaks
+	// Telegram's MTProto (its obfuscated/fake-TLS handshake yields a bogus SNI,
+	// so the connection is redialed to garbage). Domain-based geosite rules
+	// still work.
+	RouteOnly bool `json:"routeOnly,omitempty"`
 }
 
 type outbound struct {
@@ -55,6 +70,12 @@ type outbound struct {
 	Protocol       string          `json:"protocol"`
 	Settings       json.RawMessage `json:"settings,omitempty"`
 	StreamSettings *streamSettings `json:"streamSettings,omitempty"`
+	Mux            *muxConf        `json:"mux,omitempty"`
+}
+
+type muxConf struct {
+	Enabled     bool `json:"enabled"`
+	Concurrency int  `json:"concurrency"`
 }
 
 type streamSettings struct {
@@ -111,7 +132,7 @@ func Build(s *vless.ServerConfig, p routing.Profile, opts Options) ([]byte, erro
 		opts.SocksPort = 10808
 	}
 
-	proxyOut, err := buildProxyOutbound(s)
+	proxyOut, err := buildProxyOutbound(s, opts.Mux)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +146,7 @@ func Build(s *vless.ServerConfig, p routing.Profile, opts Options) ([]byte, erro
 			Port:     opts.SocksPort,
 			Protocol: "socks",
 			Settings: socksSettings{Auth: "noauth", UDP: true},
-			Sniffing: sniffing{Enabled: true, DestOverride: []string{"http", "tls", "quic"}},
+			Sniffing: sniffing{Enabled: true, DestOverride: []string{"http", "tls", "quic"}, RouteOnly: true},
 		}},
 		Outbounds: []outbound{
 			proxyOut,
@@ -134,13 +155,19 @@ func Build(s *vless.ServerConfig, p routing.Profile, opts Options) ([]byte, erro
 		},
 		Routing: routingConf{
 			DomainStrategy: "IPIfNonMatch",
-			Rules:          toRuleJSON(p.Rules()),
+			Rules:          withLoopGuard(toRuleJSON(p.Rules())),
 		},
 	}
 	return json.Marshal(cfg)
 }
 
-func buildProxyOutbound(s *vless.ServerConfig) (outbound, error) {
+func buildProxyOutbound(s *vless.ServerConfig, mux bool) (outbound, error) {
+	// Mux is incompatible with the xtls-rprx-vision flow; xray refuses to start if
+	// both are set. When mux is on, drop the flow (Reality alone still applies).
+	flow := s.Flow
+	if mux {
+		flow = ""
+	}
 	settings := map[string]any{
 		"vnext": []any{map[string]any{
 			"address": s.Host,
@@ -148,7 +175,7 @@ func buildProxyOutbound(s *vless.ServerConfig) (outbound, error) {
 			"users": []any{map[string]any{
 				"id":         s.UUID,
 				"encryption": "none",
-				"flow":       s.Flow,
+				"flow":       flow,
 			}},
 		}},
 	}
@@ -188,12 +215,32 @@ func buildProxyOutbound(s *vless.ServerConfig) (outbound, error) {
 		stream.GRPCSettings = &grpcSettings{ServiceName: s.ServiceName}
 	}
 
-	return outbound{
+	out := outbound{
 		Tag:            "proxy",
 		Protocol:       "vless",
 		Settings:       rawSettings,
 		StreamSettings: stream,
-	}, nil
+	}
+	if mux {
+		out.Mux = &muxConf{Enabled: true, Concurrency: 8}
+	}
+	return out, nil
+}
+
+// withLoopGuard prepends a rule that blackholes the TUN adapter's reserved
+// subnet. In TUN mode the OS routes the whole on-link TUN subnet into the TUN
+// device; without this guard a packet addressed to that subnet is forwarded to
+// xray, matched by the catch-all direct rule, dialed back out by the OS into
+// the TUN, and re-forwarded — an amplifying loop that exhausts memory and
+// ephemeral ports. Placed first so it wins over the catch-all. Harmless in
+// proxy mode: the range carries no real traffic.
+func withLoopGuard(rules []ruleJSON) []ruleJSON {
+	guard := ruleJSON{
+		Type:        "field",
+		OutboundTag: routing.OutboundBlock,
+		IP:          []string{routing.TUNReservedCIDR},
+	}
+	return append([]ruleJSON{guard}, rules...)
 }
 
 func toRuleJSON(rules []routing.Rule) []ruleJSON {

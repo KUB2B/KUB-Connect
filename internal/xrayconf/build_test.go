@@ -51,6 +51,91 @@ func TestBuildGolden(t *testing.T) {
 	}
 }
 
+func TestBuildLoopGuardBlocksTUNSubnetFirst(t *testing.T) {
+	got, err := Build(sampleServer(), routing.Default(), Options{SocksPort: 10808})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	var cfg struct {
+		Routing struct {
+			Rules []ruleJSON `json:"rules"`
+		} `json:"routing"`
+	}
+	if err := json.Unmarshal(got, &cfg); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(cfg.Routing.Rules) == 0 {
+		t.Fatal("no routing rules")
+	}
+	first := cfg.Routing.Rules[0]
+	if first.OutboundTag != routing.OutboundBlock {
+		t.Errorf("first rule outbound = %q, want %q (loop guard must win)", first.OutboundTag, routing.OutboundBlock)
+	}
+	found := false
+	for _, ip := range first.IP {
+		if ip == routing.TUNReservedCIDR {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("first rule IPs = %v, want to include %q", first.IP, routing.TUNReservedCIDR)
+	}
+}
+
+func TestBuildMuxDropsVisionFlowAndEnablesMux(t *testing.T) {
+	got, err := Build(sampleServer(), routing.Default(), Options{SocksPort: 10808, Mux: true})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	var cfg struct {
+		Outbounds []struct {
+			Tag      string `json:"tag"`
+			Mux      *struct {
+				Enabled     bool `json:"enabled"`
+				Concurrency int  `json:"concurrency"`
+			} `json:"mux"`
+			Settings struct {
+				Vnext []struct {
+					Users []struct {
+						Flow string `json:"flow"`
+					} `json:"users"`
+				} `json:"vnext"`
+			} `json:"settings"`
+		} `json:"outbounds"`
+	}
+	if err := json.Unmarshal(got, &cfg); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	var proxy *struct {
+		Tag string `json:"tag"`
+		Mux *struct {
+			Enabled     bool `json:"enabled"`
+			Concurrency int  `json:"concurrency"`
+		} `json:"mux"`
+		Settings struct {
+			Vnext []struct {
+				Users []struct {
+					Flow string `json:"flow"`
+				} `json:"users"`
+			} `json:"vnext"`
+		} `json:"settings"`
+	}
+	for i := range cfg.Outbounds {
+		if cfg.Outbounds[i].Tag == "proxy" {
+			proxy = &cfg.Outbounds[i]
+		}
+	}
+	if proxy == nil {
+		t.Fatal("no proxy outbound")
+	}
+	if proxy.Mux == nil || !proxy.Mux.Enabled || proxy.Mux.Concurrency <= 0 {
+		t.Errorf("mux not enabled with positive concurrency: %+v", proxy.Mux)
+	}
+	if got := proxy.Settings.Vnext[0].Users[0].Flow; got != "" {
+		t.Errorf("vision flow must be dropped when mux is on, got %q", got)
+	}
+}
+
 func TestBuildLoadsIntoXray(t *testing.T) {
 	got, err := Build(sampleServer(), routing.Default(), Options{SocksPort: 10808})
 	if err != nil {

@@ -7,6 +7,13 @@ const (
 	OutboundBlock  = "block"
 )
 
+// TUNReservedCIDR is the RFC 2544 benchmarking range used for the TUN adapter's
+// address and on-link subnet. xray blackholes it so a packet addressed to the
+// TUN's own subnet is never re-dialed by the direct outbound back into the TUN
+// (which would form an amplifying routing loop). Nothing real uses this range,
+// so blocking it is harmless in proxy mode too.
+const TUNReservedCIDR = "198.18.0.0/15"
+
 // TelegramCIDRs are Telegram's officially published IP ranges (AS62014 /
 // AS62041). Baked in rather than relying on a "geoip:telegram" category,
 // which is absent from the canonical v2fly geoip.dat. This keeps Telegram
