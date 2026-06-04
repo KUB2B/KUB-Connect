@@ -9,7 +9,9 @@ import (
 // by the Linux (iproute2) and Windows (netsh) routers.
 func runAll(cmds [][]string) error {
 	for _, cmd := range cmds {
-		if out, err := exec.Command(cmd[0], cmd[1:]...).CombinedOutput(); err != nil {
+		c := exec.Command(cmd[0], cmd[1:]...)
+		hideWindow(c) // suppress flashing console windows on Windows (no-op elsewhere)
+		if out, err := c.CombinedOutput(); err != nil {
 			return fmt.Errorf("%v: %w: %s", cmd, err, out)
 		}
 	}
