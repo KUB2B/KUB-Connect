@@ -12,6 +12,9 @@ import (
 type Options struct {
 	SocksPort int    // local SOCKS inbound port (e.g. 10808)
 	LogFile   string // optional path for xray's error log (empty = stdout/default)
+	// LogLevel is xray's log.loglevel (error/warning/debug). Empty defaults to
+	// warning.
+	LogLevel string
 	// Mux multiplexes many proxied streams over a few real connections to the
 	// server. Telegram opens dozens of sockets in parallel; without mux each is a
 	// separate Reality handshake to the server, and the burst gets dropped (DPI /
@@ -138,7 +141,7 @@ func Build(s *vless.ServerConfig, p routing.Profile, opts Options) ([]byte, erro
 	}
 
 	cfg := xrayConfig{
-		Log: logConf{LogLevel: "warning", Error: opts.LogFile},
+		Log: logConf{LogLevel: orDefault(opts.LogLevel, "warning"), Error: opts.LogFile},
 		DNS: dnsConf{Servers: []any{"1.1.1.1", "localhost"}},
 		Inbounds: []inbound{{
 			Tag:      "socks-in",

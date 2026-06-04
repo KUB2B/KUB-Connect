@@ -136,6 +136,42 @@ func TestBuildMuxDropsVisionFlowAndEnablesMux(t *testing.T) {
 	}
 }
 
+func TestBuildUsesLogLevel(t *testing.T) {
+	got, err := Build(sampleServer(), routing.Default(), Options{SocksPort: 10808, LogLevel: "debug"})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	var cfg struct {
+		Log struct {
+			LogLevel string `json:"loglevel"`
+		} `json:"log"`
+	}
+	if err := json.Unmarshal(got, &cfg); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if cfg.Log.LogLevel != "debug" {
+		t.Errorf("loglevel = %q, want debug", cfg.Log.LogLevel)
+	}
+}
+
+func TestBuildDefaultsLogLevelToWarning(t *testing.T) {
+	got, err := Build(sampleServer(), routing.Default(), Options{SocksPort: 10808})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	var cfg struct {
+		Log struct {
+			LogLevel string `json:"loglevel"`
+		} `json:"log"`
+	}
+	if err := json.Unmarshal(got, &cfg); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if cfg.Log.LogLevel != "warning" {
+		t.Errorf("loglevel = %q, want warning", cfg.Log.LogLevel)
+	}
+}
+
 func TestBuildLoadsIntoXray(t *testing.T) {
 	got, err := Build(sampleServer(), routing.Default(), Options{SocksPort: 10808})
 	if err != nil {
