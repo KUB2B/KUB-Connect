@@ -51,11 +51,15 @@ type ConnConfig struct {
 }
 
 // TUN device defaults. 198.18.0.0/15 is the benchmarking range (RFC 2544),
-// unlikely to collide with real destinations.
+// unlikely to collide with real destinations. The adapter address uses a /30 so
+// its on-link subnet stays tiny: a wide prefix would route tens of thousands of
+// addresses into the TUN and, combined with the catch-all direct rule, form a
+// routing loop. Whitelisted CIDRs are added as explicit interface routes
+// regardless of this prefix.
 const (
 	tunDevice = "tun0"
 	tunIP     = "198.18.0.1"
-	tunPrefix = 15
+	tunPrefix = 30
 )
 
 // ConnectorFactory builds a Connector for a session. The Wails layer supplies
@@ -69,6 +73,11 @@ type Deps struct {
 	Emitter   Emitter          // event sink for the frontend
 	Factory   ConnectorFactory // builds the capture session
 	Elevated  func() bool      // reports OS privilege (privilege.IsElevated)
+	// KillSwitchSupported reports whether the kill switch is implemented on this
+	// OS (firewall.Supported). Nil is treated as supported, so tests need not
+	// set it. When false, a requested kill switch is skipped with a warning
+	// rather than aborting the TUN connection.
+	KillSwitchSupported func() bool
 }
 
 // ServerDTO is a server entry as shown in the UI.
@@ -94,6 +103,7 @@ type SettingsDTO struct {
 	AutoConnect bool   `json:"autoConnect"`
 	AutoStart   bool   `json:"autoStart"`
 	KillSwitch  bool   `json:"killSwitch"`
+	Mux         bool   `json:"mux"`
 }
 
 // StateDTO is the full snapshot the frontend renders.
@@ -131,5 +141,6 @@ func settingsDTO(s store.Settings) SettingsDTO {
 		AutoConnect: s.AutoConnect,
 		AutoStart:   s.AutoStart,
 		KillSwitch:  s.KillSwitch,
+		Mux:         s.Mux,
 	}
 }

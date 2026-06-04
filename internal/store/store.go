@@ -25,6 +25,12 @@ type Settings struct {
 	AutoStart   bool `json:"autoStart"`
 	AutoConnect bool `json:"autoConnect"`
 	KillSwitch  bool `json:"killSwitch"`
+	// Mux multiplexes proxied streams over few real connections to the server.
+	// Tames the Telegram connection storm (dozens of parallel sockets). Requires
+	// the server's client to be configured with no flow (it drops xtls-rprx-vision,
+	// which is incompatible with mux). Off by default; safe only when the server
+	// side matches.
+	Mux bool `json:"mux"`
 }
 
 // State is the full persisted application state.

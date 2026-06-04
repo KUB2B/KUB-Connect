@@ -23,6 +23,7 @@ type Settings = {
   autoConnect: boolean;
   autoStart: boolean;
   killSwitch: boolean;
+  mux: boolean;
 };
 type Server = { name: string; host: string; port: number; security: string; network: string };
 type State = {
@@ -67,6 +68,7 @@ function render(st: State) {
   (<HTMLInputElement>$("ru-toggle")).checked = st.profile.forceRUDirect;
   (<HTMLSelectElement>$("mode-select")).value = st.settings.mode;
   (<HTMLInputElement>$("kill-toggle")).checked = st.settings.killSwitch;
+  (<HTMLInputElement>$("mux-toggle")).checked = st.settings.mux;
 }
 
 let current: State;
@@ -114,6 +116,10 @@ function wire() {
   });
   $("kill-toggle").addEventListener("change", () => {
     current.settings.killSwitch = (<HTMLInputElement>$("kill-toggle")).checked;
+    UpdateSettings(current.settings).catch((e) => ($("error-line").textContent = String(e)));
+  });
+  $("mux-toggle").addEventListener("change", () => {
+    current.settings.mux = (<HTMLInputElement>$("mux-toggle")).checked;
     UpdateSettings(current.settings).catch((e) => ($("error-line").textContent = String(e)));
   });
   $("clear-logs-btn").addEventListener("click", () => {

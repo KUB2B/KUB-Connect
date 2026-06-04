@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/zki/vless-client/internal/logbus"
@@ -15,13 +16,42 @@ import (
 // tunRouteCIDRs is the set of destination IP CIDRs steered into the TUN under
 // the selective host-route model: Telegram's published ranges (when enabled)
 // plus the user's custom proxy IPs. Domain-based rules cannot be host-routed.
+//
+// IPv6 ranges are deliberately excluded. Each proxied connection becomes its own
+// Reality+Vision handshake to the server (Vision is incompatible with mux, so
+// there is no connection reuse). Telegram opens dozens of sockets in parallel
+// and, via Happy Eyeballs, races an IPv4 and an IPv6 connection to every data
+// center at once — doubling that burst. The resulting storm of simultaneous
+// handshakes overwhelms the path to the server (NAT table / rate limiting /
+// DPI), so most dials time out and retry, collapsing throughput (media stalls
+// while text trickles through). Routing only IPv4 into the TUN halves the burst
+// and lets Happy Eyeballs fall back to the IPv4 path; the IPv6 attempts leave
+// the TUN and fail fast on the host instead of piling onto the tunnel.
 func tunRouteCIDRs(p routing.Profile) []string {
 	var cidrs []string
 	if p.Telegram {
 		cidrs = append(cidrs, routing.TelegramCIDRs...)
 	}
 	cidrs = append(cidrs, p.CustomProxyIPs...)
-	return cidrs
+	return ipv4Only(cidrs)
+}
+
+// ipv4Only drops IPv6 CIDRs (those containing a colon) from the list, preserving
+// order. See tunRouteCIDRs for why IPv6 is kept out of the TUN.
+func ipv4Only(cidrs []string) []string {
+	out := cidrs[:0:0]
+	for _, c := range cidrs {
+		if !strings.Contains(c, ":") {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// killSwitchSupported reports whether the kill switch can run on this OS. A nil
+// dep is treated as supported so unit tests need not wire it.
+func (s *Service) killSwitchSupported() bool {
+	return s.deps.KillSwitchSupported == nil || s.deps.KillSwitchSupported()
 }
 
 // xrayLogPath is where xray writes its error log, tailed into the log bus.
@@ -60,6 +90,10 @@ func (s *Service) Connect() error {
 	cfgJSON, err := xrayconf.Build(srv, s.state.Profile, xrayconf.Options{
 		SocksPort: socksPort,
 		LogFile:   s.xrayLogPath(),
+		// Mux tames the Telegram connection storm. It drops the xtls-rprx-vision
+		// flow, so it only works when the server's client is configured with no
+		// flow. User-gated to avoid breaking vision-only servers.
+		Mux: s.state.Settings.Mux,
 	})
 	if err != nil {
 		s.setConn(ConnError, err.Error())
@@ -78,10 +112,14 @@ func (s *Service) Connect() error {
 		cc.TunIP = tunIP
 		cc.TunPrefix = tunPrefix
 		cc.RouteCIDRs = tunRouteCIDRs(s.state.Profile)
-		cc.KillSwitch = s.state.Settings.KillSwitch
 		s.bus.Append("note: TUN mode routes whitelisted IPs only; geosite domains are not host-routed")
-		if cc.KillSwitch {
-			s.bus.Append("note: kill switch active — whitelisted IPs are blocked if they leave the TUN")
+		if s.state.Settings.KillSwitch {
+			if s.killSwitchSupported() {
+				cc.KillSwitch = true
+				s.bus.Append("note: kill switch active — whitelisted IPs are blocked if they leave the TUN")
+			} else {
+				s.bus.Append("note: kill switch not supported on this OS — continuing without it")
+			}
 		}
 	}
 

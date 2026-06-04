@@ -2,6 +2,8 @@ package app
 
 import (
 	"errors"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/zki/vless-client/internal/routing"
@@ -118,6 +120,37 @@ func TestConnectTUNPassesKillSwitch(t *testing.T) {
 	}
 }
 
+func TestConnectTUNDropsUnsupportedKillSwitch(t *testing.T) {
+	dir := t.TempDir()
+	var captured ConnConfig
+	deps := Deps{
+		StatePath:           filepath.Join(dir, "state.json"),
+		LogDir:              dir,
+		Emitter:             &fakeEmitter{},
+		Elevated:            func() bool { return true },
+		KillSwitchSupported: func() bool { return false },
+		Factory: func(c ConnConfig) (Connector, error) {
+			captured = c
+			return &fakeConnector{}, nil
+		},
+	}
+	svc, err := New(deps)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	mustAdd(t, svc, sampleLink)
+	if err := svc.UpdateSettings(SettingsDTO{Mode: "tun", KillSwitch: true}); err != nil {
+		t.Fatalf("UpdateSettings: %v", err)
+	}
+	// Connect must succeed (not abort) and silently drop the kill switch.
+	if err := svc.Connect(); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	if captured.KillSwitch {
+		t.Error("ConnConfig.KillSwitch must be false when unsupported on this OS")
+	}
+}
+
 func TestConnectProxyIgnoresKillSwitch(t *testing.T) {
 	svc, _, _, captured := testDeps(t)
 	mustAdd(t, svc, sampleLink)
@@ -158,6 +191,23 @@ func TestConnectTUNExcludesTelegramWhenDisabled(t *testing.T) {
 	}
 	if !sliceContains(captured.RouteCIDRs, "203.0.113.0/24") {
 		t.Errorf("custom IP should still be present: %v", captured.RouteCIDRs)
+	}
+}
+
+func TestConnectTUNExcludesIPv6Routes(t *testing.T) {
+	svc, _, _, captured := testDeps(t)
+	mustAdd(t, svc, sampleLink)
+	if err := svc.Connect(); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	for _, c := range captured.RouteCIDRs {
+		if strings.Contains(c, ":") {
+			t.Errorf("IPv6 CIDR %q routed into TUN; IPv6 must be excluded to halve the handshake storm: %v", c, captured.RouteCIDRs)
+		}
+	}
+	// IPv4 telegram ranges must still be present.
+	if !sliceContains(captured.RouteCIDRs, routing.TelegramCIDRs[0]) {
+		t.Errorf("IPv4 telegram CIDRs missing: %v", captured.RouteCIDRs)
 	}
 }
 

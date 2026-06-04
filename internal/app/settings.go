@@ -37,6 +37,7 @@ func (s *Service) UpdateSettings(in SettingsDTO) error {
 		AutoConnect: in.AutoConnect,
 		AutoStart:   in.AutoStart,
 		KillSwitch:  in.KillSwitch,
+		Mux:         in.Mux,
 	}
 	if err := s.persist(); err != nil {
 		return err

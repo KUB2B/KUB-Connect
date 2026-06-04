@@ -11,9 +11,11 @@ import (
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/zki/vless-client/internal/app"
+	"github.com/zki/vless-client/internal/firewall"
 	"github.com/zki/vless-client/internal/geoassets"
 	"github.com/zki/vless-client/internal/privilege"
 	"github.com/zki/vless-client/internal/store"
+	"github.com/zki/vless-client/internal/tun"
 )
 
 // wailsEmitter implements app.Emitter via the Wails runtime.
@@ -54,12 +56,21 @@ func (a *App) startup(ctx context.Context) {
 	logDir := filepath.Dir(statePath)
 	_ = os.MkdirAll(logDir, 0o755)
 
+	// Diagnostic: capture tun2socks engine logs (per-connection lines, device
+	// read errors) to tun.log, since the GUI process has no usable stderr.
+	if f, err := os.OpenFile(filepath.Join(logDir, "tun.log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644); err != nil {
+		log.Printf("tun log: %v", err)
+	} else {
+		tun.SetLogWriter(f)
+	}
+
 	svc, err := app.New(app.Deps{
-		StatePath: statePath,
-		LogDir:    logDir,
-		Emitter:   wailsEmitter{ctx},
-		Factory:   newConnector,
-		Elevated:  privilege.IsElevated,
+		StatePath:           statePath,
+		LogDir:              logDir,
+		Emitter:             wailsEmitter{ctx},
+		Factory:             newConnector,
+		Elevated:            privilege.IsElevated,
+		KillSwitchSupported: firewall.Supported,
 	})
 	if err != nil {
 		log.Printf("init service: %v", err)
@@ -72,7 +83,12 @@ func (a *App) startup(ctx context.Context) {
 	a.svc.MaybeAutoConnect()
 }
 
-func (a *App) GetState() app.StateDTO                 { return a.svc.GetState() }
+func (a *App) GetState() app.StateDTO {
+	if a.svc == nil {
+		return app.StateDTO{}
+	}
+	return a.svc.GetState()
+}
 func (a *App) AddServer(link string) error            { return a.svc.AddServer(link) }
 func (a *App) RemoveServer(index int) error           { return a.svc.RemoveServer(index) }
 func (a *App) SetActiveServer(index int) error        { return a.svc.SetActiveServer(index) }
@@ -80,4 +96,9 @@ func (a *App) UpdateProfile(p app.ProfileDTO) error   { return a.svc.UpdateProfi
 func (a *App) UpdateSettings(s app.SettingsDTO) error { return a.svc.UpdateSettings(s) }
 func (a *App) Connect() error                         { return a.svc.Connect() }
 func (a *App) Disconnect() error                      { return a.svc.Disconnect() }
-func (a *App) Logs() []string                         { return a.svc.Logs() }
+func (a *App) Logs() []string {
+	if a.svc == nil {
+		return nil
+	}
+	return a.svc.Logs()
+}
