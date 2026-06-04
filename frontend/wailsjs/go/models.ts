@@ -1,15 +1,15 @@
 export namespace app {
-	
+
 	export class ProfileDTO {
 	    telegram: boolean;
 	    forceRUDirect: boolean;
 	    customProxyDomains: string[];
 	    customProxyIPs: string[];
-	
+
 	    static createFrom(source: any = {}) {
 	        return new ProfileDTO(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.telegram = source["telegram"];
@@ -24,11 +24,11 @@ export namespace app {
 	    port: number;
 	    security: string;
 	    network: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new ServerDTO(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -43,17 +43,21 @@ export namespace app {
 	    autoConnect: boolean;
 	    autoStart: boolean;
 	    killSwitch: boolean;
-	
+	    mux: boolean;
+	    logLevel: string;
+
 	    static createFrom(source: any = {}) {
 	        return new SettingsDTO(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.mode = source["mode"];
 	        this.autoConnect = source["autoConnect"];
 	        this.autoStart = source["autoStart"];
 	        this.killSwitch = source["killSwitch"];
+	        this.mux = source["mux"];
+	        this.logLevel = source["logLevel"];
 	    }
 	}
 	export class StateDTO {
@@ -63,11 +67,11 @@ export namespace app {
 	    settings: SettingsDTO;
 	    conn: string;
 	    lastError: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new StateDTO(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.servers = this.convertValues(source["servers"], ServerDTO);
@@ -77,7 +81,7 @@ export namespace app {
 	        this.conn = source["conn"];
 	        this.lastError = source["lastError"];
 	    }
-	
+
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -98,4 +102,3 @@ export namespace app {
 	}
 
 }
-
