@@ -54,6 +54,11 @@ func Start(device, socksURL string) error {
 	}
 	engine.Insert(key)
 	engine.Start()
+	// engine.Start installs its own logger; override afterwards so the engine's
+	// runtime logs reach our capture sink (the GUI process has no stderr).
+	if engineLogWriter != nil {
+		installEngineLogger(engineLogWriter)
+	}
 	return nil
 }
 
