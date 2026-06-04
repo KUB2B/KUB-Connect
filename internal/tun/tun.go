@@ -50,7 +50,7 @@ func Start(device, socksURL string) error {
 	key := &engine.Key{
 		Device:   "tun://" + device,
 		Proxy:    socksURL,
-		LogLevel: "warning",
+		LogLevel: engineLevel,
 	}
 	engine.Insert(key)
 	engine.Start()
