@@ -11,6 +11,9 @@ type linuxFirewall struct{}
 // New returns the Linux (nftables) kill switch.
 func New() Firewall { return linuxFirewall{} }
 
+// Supported reports whether the kill switch is implemented on this OS.
+func Supported() bool { return true }
+
 // checkNft verifies the nft binary is available before we try to use it, so a
 // missing dependency is a clear error rather than a confusing apply failure.
 func checkNft() error {

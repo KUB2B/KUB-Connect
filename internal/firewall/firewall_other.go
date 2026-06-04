@@ -13,6 +13,9 @@ type stubFirewall struct{}
 // firewall support is a later iteration.
 func New() Firewall { return stubFirewall{} }
 
+// Supported reports whether the kill switch is implemented on this OS.
+func Supported() bool { return false }
+
 func (stubFirewall) On(Config) error {
 	return fmt.Errorf("firewall: kill switch not supported on %s yet", runtime.GOOS)
 }
