@@ -11,3 +11,6 @@ frontend/dist/
 
 # JetBrains IDE
 .idea/
+
+# Superpowers brainstorm sessions
+.superpowers/
