@@ -42,6 +42,26 @@ func TestUpdateSettingsPersists(t *testing.T) {
 	}
 }
 
+func TestUpdateSettingsPersistsLogLevel(t *testing.T) {
+	svc, _, _, _ := testDeps(t)
+	if err := svc.UpdateSettings(SettingsDTO{Mode: "tun", LogLevel: "debug"}); err != nil {
+		t.Fatalf("UpdateSettings: %v", err)
+	}
+	if got := svc.GetState().Settings.LogLevel; got != "debug" {
+		t.Errorf("LogLevel = %q, want debug", got)
+	}
+}
+
+func TestUpdateSettingsCoercesInvalidLogLevel(t *testing.T) {
+	svc, _, _, _ := testDeps(t)
+	if err := svc.UpdateSettings(SettingsDTO{Mode: "tun", LogLevel: "screaming"}); err != nil {
+		t.Fatalf("UpdateSettings: %v", err)
+	}
+	if got := svc.GetState().Settings.LogLevel; got != "warning" {
+		t.Errorf("LogLevel = %q, want warning (coerced)", got)
+	}
+}
+
 func TestUpdateSettingsRejectsBadMode(t *testing.T) {
 	svc, _, _, _ := testDeps(t)
 	if err := svc.UpdateSettings(SettingsDTO{Mode: "bogus"}); err == nil {

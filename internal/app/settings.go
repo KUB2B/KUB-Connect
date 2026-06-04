@@ -38,6 +38,7 @@ func (s *Service) UpdateSettings(in SettingsDTO) error {
 		AutoStart:   in.AutoStart,
 		KillSwitch:  in.KillSwitch,
 		Mux:         in.Mux,
+		LogLevel:    store.NormalizeLogLevel(in.LogLevel),
 	}
 	if err := s.persist(); err != nil {
 		return err

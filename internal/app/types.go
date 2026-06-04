@@ -48,6 +48,7 @@ type ConnConfig struct {
 	TunPrefix  int
 	RouteCIDRs []string
 	KillSwitch bool
+	LogLevel   string
 }
 
 // TUN device defaults. 198.18.0.0/15 is the benchmarking range (RFC 2544),
@@ -104,6 +105,7 @@ type SettingsDTO struct {
 	AutoStart   bool   `json:"autoStart"`
 	KillSwitch  bool   `json:"killSwitch"`
 	Mux         bool   `json:"mux"`
+	LogLevel    string `json:"logLevel"`
 }
 
 // StateDTO is the full snapshot the frontend renders.
@@ -142,5 +144,6 @@ func settingsDTO(s store.Settings) SettingsDTO {
 		AutoStart:   s.AutoStart,
 		KillSwitch:  s.KillSwitch,
 		Mux:         s.Mux,
+		LogLevel:    s.LogLevel,
 	}
 }
