@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="ru">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,47 +7,67 @@
   </head>
   <body>
     <div id="app">
-      <header>
-        <h1>VLESS Client</h1>
-        <div id="status-pill" class="pill disconnected">disconnected</div>
-      </header>
+      <nav id="tabbar">
+        <button class="tab active" data-tab="home">Главная</button>
+        <button class="tab" data-tab="settings">Настройки</button>
+        <button class="tab" data-tab="logs">Логи</button>
+      </nav>
 
-      <section id="status">
-        <p>Active server: <span id="active-server">—</span></p>
-        <button id="connect-btn">Connect</button>
-        <button id="disconnect-btn">Disconnect</button>
-        <p id="error-line" class="error"></p>
+      <!-- ГЛАВНАЯ -->
+      <section id="tab-home" class="tab-panel">
+        <div class="home">
+          <button id="power-btn" class="power disconnected" title="Подключить/отключить">
+            <span class="power-glyph">⏻</span>
+          </button>
+          <div id="status-text" class="status-text">Отключено</div>
+          <label class="server-pick">
+            <span class="label">Сервер</span>
+            <select id="server-select"></select>
+          </label>
+          <p id="error-line" class="error"></p>
+        </div>
       </section>
 
-      <section id="servers">
-        <h2>Servers</h2>
+      <!-- НАСТРОЙКИ -->
+      <section id="tab-settings" class="tab-panel hidden">
+        <h2>Серверы</h2>
         <div class="row">
           <input id="link-input" type="text" placeholder="vless://..." />
-          <button id="add-server-btn">Add</button>
+          <button id="add-server-btn">Добавить</button>
         </div>
         <p id="link-error" class="error"></p>
         <ul id="server-list"></ul>
-      </section>
 
-      <section id="routing">
-        <h2>Routing</h2>
-        <label><input type="checkbox" id="tg-toggle" /> Telegram → VPN</label>
-        <label><input type="checkbox" id="ru-toggle" /> Force RU direct</label>
+        <h2>Режим</h2>
         <div class="row">
-          <label>Mode:
-            <select id="mode-select">
-              <option value="proxy">Proxy (system SOCKS)</option>
-              <option value="tun">TUN (whitelisted IPs, requires admin)</option>
-            </select>
-          </label>
+          <select id="mode-select">
+            <option value="proxy">Proxy (системный SOCKS)</option>
+            <option value="tun">TUN (нужны права администратора)</option>
+          </select>
         </div>
+
+        <h2>Маршрутизация</h2>
+        <label><input type="checkbox" id="tg-toggle" /> Telegram → VPN</label>
+        <label><input type="checkbox" id="ru-toggle" /> RU напрямую</label>
         <label><input type="checkbox" id="kill-toggle" /> Kill switch (TUN)</label>
-        <label><input type="checkbox" id="mux-toggle" /> Mux (Telegram fix — server must use no-flow client)</label>
+        <label><input type="checkbox" id="mux-toggle" /> Mux (для Telegram — на сервере клиент без flow)</label>
+
+        <h2>Логи</h2>
+        <label class="row">
+          <span class="label">Уровень</span>
+          <select id="loglevel-select">
+            <option value="error">Тихо</option>
+            <option value="warning">Обычный</option>
+            <option value="debug">Подробно</option>
+          </select>
+        </label>
       </section>
 
-      <section id="logs">
-        <h2>Logs</h2>
-        <button id="clear-logs-btn">Clear</button>
+      <!-- ЛОГИ -->
+      <section id="tab-logs" class="tab-panel hidden">
+        <div class="row">
+          <button id="clear-logs-btn">Очистить</button>
+        </div>
         <pre id="log-view"></pre>
       </section>
     </div>
