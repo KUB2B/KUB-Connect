@@ -20,6 +20,9 @@ import (
 	"github.com/zki/vless-client/internal/xrayconf"
 )
 
+// version is overridden at release time via -ldflags "-X main.version=v0.1.0".
+var version = "dev"
+
 // coreAdapter adapts core.Start to the tunnel.Core interface.
 type coreAdapter struct{}
 
@@ -38,7 +41,13 @@ func main() {
 	port := flag.Int("port", 10808, "local SOCKS inbound port")
 	mode := flag.String("mode", "proxy", "capture mode: proxy | tun")
 	device := flag.String("device", "tun0", "TUN device name (tun mode)")
+	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Println(version)
+		return
+	}
 
 	if *link == "" {
 		log.Fatal("usage: headless -link 'vless://...' [-port 10808] [-mode proxy|tun]")
