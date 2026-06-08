@@ -79,6 +79,15 @@ type Deps struct {
 	// set it. When false, a requested kill switch is skipped with a warning
 	// rather than aborting the TUN connection.
 	KillSwitchSupported func() bool
+	// TUNSupported reports whether TUN routing is implemented on this OS
+	// (netcfg.Supported). Nil is treated as supported, so tests need not set it.
+	// When false and the persisted mode is TUN, the mode is coerced to proxy at
+	// startup (see New).
+	TUNSupported func() bool
+	// OS is the runtime GOOS, surfaced to the frontend via Caps.
+	OS string
+	// Version is the build version string, surfaced to the frontend via Caps.
+	Version string
 }
 
 // ServerDTO is a server entry as shown in the UI.
@@ -108,6 +117,14 @@ type SettingsDTO struct {
 	LogLevel    string `json:"logLevel"`
 }
 
+// CapsDTO tells the frontend what this build/platform supports.
+type CapsDTO struct {
+	OS                  string `json:"os"`
+	Version             string `json:"version"`
+	TUNSupported        bool   `json:"tunSupported"`
+	KillSwitchSupported bool   `json:"killSwitchSupported"`
+}
+
 // StateDTO is the full snapshot the frontend renders.
 type StateDTO struct {
 	Servers      []ServerDTO `json:"servers"`
@@ -116,6 +133,7 @@ type StateDTO struct {
 	Settings     SettingsDTO `json:"settings"`
 	Conn         string      `json:"conn"`
 	LastError    string      `json:"lastError"`
+	Caps         CapsDTO     `json:"caps"`
 }
 
 func serverDTO(s *vless.ServerConfig) ServerDTO {

@@ -58,6 +58,42 @@ func testDepsElevation(t *testing.T, elevated bool) (*Service, *fakeEmitter, *fa
 	return svc, em, fc, &captured
 }
 
+func TestCapsAndTUNFallback(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+
+	// Persist a state whose mode is TUN.
+	st := store.DefaultState()
+	st.Settings.Mode = store.ModeTUN
+	if err := store.Save(statePath, st); err != nil {
+		t.Fatal(err)
+	}
+
+	svc, err := New(Deps{
+		StatePath:    statePath,
+		TUNSupported: func() bool { return false },
+		OS:           "darwin",
+		Version:      "v9.9.9",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := svc.GetState()
+	if got.Caps.TUNSupported {
+		t.Error("Caps.TUNSupported = true, want false")
+	}
+	if got.Caps.OS != "darwin" {
+		t.Errorf("Caps.OS = %q, want darwin", got.Caps.OS)
+	}
+	if got.Caps.Version != "v9.9.9" {
+		t.Errorf("Caps.Version = %q, want v9.9.9", got.Caps.Version)
+	}
+	if got.Settings.Mode != string(store.ModeProxy) {
+		t.Errorf("Settings.Mode = %q, want proxy (TUN should fall back)", got.Settings.Mode)
+	}
+}
+
 func TestNewLoadsDefaultStateWhenNoFile(t *testing.T) {
 	svc, _, _, _ := testDeps(t)
 	st := svc.GetState()
