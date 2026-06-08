@@ -1,15 +1,33 @@
 export namespace app {
-
+	
+	export class CapsDTO {
+	    os: string;
+	    version: string;
+	    tunSupported: boolean;
+	    killSwitchSupported: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new CapsDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.os = source["os"];
+	        this.version = source["version"];
+	        this.tunSupported = source["tunSupported"];
+	        this.killSwitchSupported = source["killSwitchSupported"];
+	    }
+	}
 	export class ProfileDTO {
 	    telegram: boolean;
 	    forceRUDirect: boolean;
 	    customProxyDomains: string[];
 	    customProxyIPs: string[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ProfileDTO(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.telegram = source["telegram"];
@@ -24,11 +42,11 @@ export namespace app {
 	    port: number;
 	    security: string;
 	    network: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ServerDTO(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -45,11 +63,11 @@ export namespace app {
 	    killSwitch: boolean;
 	    mux: boolean;
 	    logLevel: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new SettingsDTO(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.mode = source["mode"];
@@ -67,11 +85,12 @@ export namespace app {
 	    settings: SettingsDTO;
 	    conn: string;
 	    lastError: string;
-
+	    caps: CapsDTO;
+	
 	    static createFrom(source: any = {}) {
 	        return new StateDTO(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.servers = this.convertValues(source["servers"], ServerDTO);
@@ -80,8 +99,9 @@ export namespace app {
 	        this.settings = this.convertValues(source["settings"], SettingsDTO);
 	        this.conn = source["conn"];
 	        this.lastError = source["lastError"];
+	        this.caps = this.convertValues(source["caps"], CapsDTO);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -102,3 +122,4 @@ export namespace app {
 	}
 
 }
+
