@@ -14,6 +14,9 @@ type unsupportedRouter struct{}
 // routing is a later iteration. Proxy mode is unaffected.
 func New() Router { return unsupportedRouter{} }
 
+// Supported reports whether TUN routing is implemented on this OS.
+func Supported() bool { return false }
+
 func (unsupportedRouter) Up(Config) error {
 	return fmt.Errorf("netcfg: TUN routing not supported on %s yet", runtime.GOOS)
 }

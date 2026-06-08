@@ -34,3 +34,9 @@ func TestLinuxDownCommands(t *testing.T) {
 		t.Errorf("downCommands =\n%v\nwant\n%v", got, want)
 	}
 }
+
+func TestSupportedLinux(t *testing.T) {
+	if !Supported() {
+		t.Fatal("Supported() = false on linux, want true")
+	}
+}
