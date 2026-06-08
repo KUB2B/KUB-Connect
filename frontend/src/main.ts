@@ -121,7 +121,10 @@ function render(st: State) {
     modeSel.value = "proxy";
   }
   $("app-version").textContent = st.caps.version;
-  (<HTMLInputElement>$("kill-toggle")).checked = st.settings.killSwitch;
+  const killToggle = <HTMLInputElement>$("kill-toggle");
+  killToggle.checked = st.settings.killSwitch;
+  killToggle.disabled = !st.caps.killSwitchSupported;
+  killToggle.title = st.caps.killSwitchSupported ? "" : "Kill switch не поддерживается на этой ОС";
   (<HTMLInputElement>$("mux-toggle")).checked = st.settings.mux;
   (<HTMLSelectElement>$("loglevel-select")).value = st.settings.logLevel || "warning";
 }
