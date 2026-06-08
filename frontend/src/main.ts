@@ -27,6 +27,12 @@ type Settings = {
   logLevel: string;
 };
 type Server = { name: string; host: string; port: number; security: string; network: string };
+type Caps = {
+  os: string;
+  version: string;
+  tunSupported: boolean;
+  killSwitchSupported: boolean;
+};
 type State = {
   servers: Server[];
   activeServer: number;
@@ -34,6 +40,7 @@ type State = {
   settings: Settings;
   conn: string;
   lastError: string;
+  caps: Caps;
 };
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -104,6 +111,16 @@ function render(st: State) {
   (<HTMLInputElement>$("tg-toggle")).checked = st.profile.telegram;
   (<HTMLInputElement>$("ru-toggle")).checked = st.profile.forceRUDirect;
   (<HTMLSelectElement>$("mode-select")).value = st.settings.mode;
+  const modeSel = <HTMLSelectElement>$("mode-select");
+  const tunOpt = modeSel.querySelector<HTMLOptionElement>('option[value="tun"]');
+  if (tunOpt) {
+    tunOpt.disabled = !st.caps.tunSupported;
+    tunOpt.hidden = !st.caps.tunSupported;
+  }
+  if (!st.caps.tunSupported && modeSel.value === "tun") {
+    modeSel.value = "proxy";
+  }
+  $("app-version").textContent = st.caps.version;
   (<HTMLInputElement>$("kill-toggle")).checked = st.settings.killSwitch;
   (<HTMLInputElement>$("mux-toggle")).checked = st.settings.mux;
   (<HTMLSelectElement>$("loglevel-select")).value = st.settings.logLevel || "warning";
