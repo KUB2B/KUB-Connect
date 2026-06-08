@@ -6,6 +6,10 @@
 # Wails
 frontend/node_modules/
 frontend/dist/
+# Release artifacts
+/build/release/
+*.dmg
+*-installer.exe
 # OS
 .DS_Store
 

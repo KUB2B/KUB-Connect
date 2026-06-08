@@ -7,12 +7,14 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/zki/vless-client/internal/app"
 	"github.com/zki/vless-client/internal/firewall"
 	"github.com/zki/vless-client/internal/geoassets"
+	"github.com/zki/vless-client/internal/netcfg"
 	"github.com/zki/vless-client/internal/privilege"
 	"github.com/zki/vless-client/internal/store"
 	"github.com/zki/vless-client/internal/tun"
@@ -71,6 +73,9 @@ func (a *App) startup(ctx context.Context) {
 		Factory:             newConnector,
 		Elevated:            privilege.IsElevated,
 		KillSwitchSupported: firewall.Supported,
+		TUNSupported:        netcfg.Supported,
+		OS:                  runtime.GOOS,
+		Version:             version,
 	})
 	if err != nil {
 		log.Printf("init service: %v", err)

@@ -26,6 +26,11 @@ func New(d Deps) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Coerce an unsupported TUN mode to proxy in memory only; the on-disk
+	// preference is preserved in case this build later runs on a TUN-capable host.
+	if st.Settings.Mode == store.ModeTUN && d.TUNSupported != nil && !d.TUNSupported() {
+		st.Settings.Mode = store.ModeProxy
+	}
 	return &Service{
 		deps:  d,
 		bus:   logbus.New(2000),
@@ -47,6 +52,12 @@ func (s *Service) snapshot() StateDTO {
 		Settings:     settingsDTO(s.state.Settings),
 		Conn:         string(s.conn),
 		LastError:    s.lastError,
+		Caps: CapsDTO{
+			OS:                  s.deps.OS,
+			Version:             s.deps.Version,
+			TUNSupported:        s.tunSupported(),
+			KillSwitchSupported: s.killSwitchSupported(),
+		},
 	}
 }
 

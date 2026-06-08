@@ -9,6 +9,9 @@ type linuxRouter struct{}
 // New returns the Linux (iproute2) router.
 func New() Router { return linuxRouter{} }
 
+// Supported reports whether TUN routing is implemented on this OS.
+func Supported() bool { return true }
+
 func cidr(ip string, prefix int) string {
 	return ip + "/" + strconv.Itoa(prefix)
 }

@@ -54,6 +54,12 @@ func (s *Service) killSwitchSupported() bool {
 	return s.deps.KillSwitchSupported == nil || s.deps.KillSwitchSupported()
 }
 
+// tunSupported reports whether TUN routing can run on this OS. A nil dep is
+// treated as supported so tests need not set it.
+func (s *Service) tunSupported() bool {
+	return s.deps.TUNSupported == nil || s.deps.TUNSupported()
+}
+
 // xrayLogPath is where xray writes its error log, tailed into the log bus.
 func (s *Service) xrayLogPath() string {
 	return filepath.Join(s.deps.LogDir, "xray.log")

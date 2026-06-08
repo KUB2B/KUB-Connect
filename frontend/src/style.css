@@ -71,3 +71,5 @@ label { display: block; margin: 0.4rem 0; }
   background: #0a0d11; padding: 0.6rem; height: 60vh; overflow-y: auto;
   font-size: 0.78rem; white-space: pre-wrap; border-radius: 6px; border: 1px solid var(--border);
 }
+
+.version { font-size: 0.72rem; color: var(--muted); text-align: right; padding: 0.3rem 0.6rem; }
