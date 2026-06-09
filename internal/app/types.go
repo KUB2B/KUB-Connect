@@ -123,6 +123,7 @@ type CapsDTO struct {
 	Version             string `json:"version"`
 	TUNSupported        bool   `json:"tunSupported"`
 	KillSwitchSupported bool   `json:"killSwitchSupported"`
+	Elevated            bool   `json:"elevated"`
 }
 
 // StateDTO is the full snapshot the frontend renders.

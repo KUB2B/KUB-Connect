@@ -11,6 +11,7 @@ import {
   Logs,
   HideToTray,
   QuitApp,
+  RelaunchElevated,
 } from "../wailsjs/go/main/App";
 import { EventsOn } from "../wailsjs/runtime";
 
@@ -34,6 +35,7 @@ type Caps = {
   version: string;
   tunSupported: boolean;
   killSwitchSupported: boolean;
+  elevated: boolean;
 };
 type State = {
   servers: Server[];
@@ -189,8 +191,13 @@ function wire() {
     UpdateProfile(current.profile);
   });
   $("mode-select").addEventListener("change", () => {
-    current.settings.mode = (<HTMLSelectElement>$("mode-select")).value;
+    const val = (<HTMLSelectElement>$("mode-select")).value;
+    current.settings.mode = val;
     pushSettings();
+    // TUN needs admin. If we are not elevated, offer a restart-with-admin.
+    if (val === "tun" && current.caps.tunSupported && !current.caps.elevated) {
+      $("elevate-modal").classList.remove("hidden");
+    }
   });
   $("kill-toggle").addEventListener("change", () => {
     current.settings.killSwitch = (<HTMLInputElement>$("kill-toggle")).checked;
@@ -223,10 +230,34 @@ function wire() {
   EventsOn("close-requested", () => {
     closeModal.classList.remove("hidden");
   });
-  // Escape dismisses the close-choice modal (same as Отмена).
+  // Escape dismisses the close-choice modal (same as Отмена). Yields to the
+  // elevate modal when both happen to be open (it handles its own Escape).
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !closeModal.classList.contains("hidden")) {
+    const elevateOpen = !$("elevate-modal").classList.contains("hidden");
+    if (e.key === "Escape" && !closeModal.classList.contains("hidden") && !elevateOpen) {
       closeModal.classList.add("hidden");
+    }
+  });
+
+  // Elevate (restart-with-admin) modal.
+  const elevateModal = $("elevate-modal");
+  const revertToProxy = () => {
+    elevateModal.classList.add("hidden");
+    const sel = <HTMLSelectElement>$("mode-select");
+    sel.value = "proxy";
+    current.settings.mode = "proxy";
+    pushSettings();
+  };
+  $("elevate-restart").addEventListener("click", () => {
+    RelaunchElevated().catch((e) => {
+      revertToProxy();
+      $("error-line").textContent = String(e);
+    });
+  });
+  $("elevate-cancel").addEventListener("click", revertToProxy);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !elevateModal.classList.contains("hidden")) {
+      revertToProxy();
     }
   });
 
