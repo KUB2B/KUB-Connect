@@ -154,3 +154,14 @@ func TestSubscribeConnCancelStopsDelivery(t *testing.T) {
 		t.Fatalf("want 1 delivery before cancel, got %d", n)
 	}
 }
+
+func TestCapsElevatedReflectsDep(t *testing.T) {
+	svc, _, _, _ := testDepsElevation(t, false)
+	if svc.GetState().Caps.Elevated {
+		t.Fatal("want Caps.Elevated=false when dep reports not elevated")
+	}
+	svc2, _, _, _ := testDepsElevation(t, true)
+	if !svc2.GetState().Caps.Elevated {
+		t.Fatal("want Caps.Elevated=true when dep reports elevated")
+	}
+}

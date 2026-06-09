@@ -61,6 +61,7 @@ func (s *Service) snapshot() StateDTO {
 			Version:             s.deps.Version,
 			TUNSupported:        s.tunSupported(),
 			KillSwitchSupported: s.killSwitchSupported(),
+			Elevated:            s.elevated(),
 		},
 	}
 }
@@ -82,6 +83,14 @@ func (s *Service) emitState() {
 // persist writes state to disk. Caller must hold s.mu.
 func (s *Service) persist() error {
 	return store.Save(s.deps.StatePath, s.state)
+}
+
+// Persist writes the current state to disk, acquiring the lock itself. Used by
+// the GUI before an elevated restart so the new instance loads the latest state.
+func (s *Service) Persist() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.persist()
 }
 
 // SubscribeConn registers fn to receive connection-state changes. fn is called

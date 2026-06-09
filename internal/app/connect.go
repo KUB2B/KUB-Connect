@@ -60,6 +60,12 @@ func (s *Service) tunSupported() bool {
 	return s.deps.TUNSupported == nil || s.deps.TUNSupported()
 }
 
+// elevated reports whether the process has admin/root privileges. A nil dep is
+// treated as elevated so unit tests need not set it (mirrors tunSupported).
+func (s *Service) elevated() bool {
+	return s.deps.Elevated == nil || s.deps.Elevated()
+}
+
 // xrayLogPath is where xray writes its error log, tailed into the log bus.
 func (s *Service) xrayLogPath() string {
 	return filepath.Join(s.deps.LogDir, "xray.log")
