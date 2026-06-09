@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync/atomic"
 
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
@@ -50,6 +51,12 @@ type App struct {
 	ctx      context.Context
 	svc      *app.Service
 	trayStop func() // tears down the tray on shutdown
+	// quitting marks an intentional quit (tray "Выход" or the modal "Выйти") so
+	// beforeClose lets the close through instead of re-prompting. Wails routes
+	// runtime.Quit through OnBeforeClose, so without this flag an always-veto
+	// beforeClose would make the app impossible to quit. Atomic because it is set
+	// from the systray goroutine and read on the main thread.
+	quitting atomic.Bool
 }
 
 func NewApp() *App { return &App{} }
@@ -122,7 +129,7 @@ func (a *App) startup(ctx context.Context) {
 		},
 		onConnect:    func() { go func() { _ = a.svc.Connect() }() },
 		onDisconnect: func() { go func() { _ = a.svc.Disconnect() }() },
-		onQuit:       func() { wruntime.Quit(a.ctx) },
+		onQuit:       func() { a.quit() },
 	})
 }
 
@@ -144,10 +151,15 @@ func (a *App) shutdown(ctx context.Context) {
 	}
 }
 
-// beforeClose runs when the user clicks the window close button. It always
-// cancels the native close (returns true) and asks the frontend to show the
-// minimize-or-quit choice. The frontend then calls HideToTray or QuitApp.
+// beforeClose runs on every close attempt, including the window close button
+// AND programmatic runtime.Quit. For an intentional quit (quitting set) it lets
+// the close proceed. Otherwise (user clicked the window X) it cancels the native
+// close and asks the frontend to show the minimize-or-quit choice; the frontend
+// then calls HideToTray or QuitApp.
 func (a *App) beforeClose(ctx context.Context) (preventClose bool) {
+	if a.quitting.Load() {
+		return false
+	}
 	wruntime.EventsEmit(a.ctx, "close-requested")
 	return true
 }
@@ -158,7 +170,14 @@ func (a *App) HideToTray() { wruntime.WindowHide(a.ctx) }
 
 // QuitApp quits the whole app (runs shutdown → Disconnect → proxy cleanup).
 // Bound to the frontend.
-func (a *App) QuitApp() { wruntime.Quit(a.ctx) }
+func (a *App) QuitApp() { a.quit() }
+
+// quit marks the quit intentional and asks Wails to terminate. Shared by the
+// modal "Выйти" (QuitApp) and the tray "Выход".
+func (a *App) quit() {
+	a.quitting.Store(true)
+	wruntime.Quit(a.ctx)
+}
 
 func (a *App) GetState() app.StateDTO {
 	if a.svc == nil {
