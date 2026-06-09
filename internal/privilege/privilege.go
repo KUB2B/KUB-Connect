@@ -2,7 +2,14 @@
 // (root / Administrator) required for TUN-mode networking.
 package privilege
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
+
+// ErrElevationDeclined is returned by RelaunchElevated when the user dismisses
+// the OS elevation (UAC) prompt.
+var ErrElevationDeclined = errors.New("elevation request was declined")
 
 // RequireElevated returns a descriptive error if the process is not elevated.
 // purpose names the feature needing elevation, for the message.
