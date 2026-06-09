@@ -92,7 +92,7 @@ func (s *Service) Connect() error {
 		return fmt.Errorf("no active server selected")
 	}
 	mode := s.state.Settings.Mode
-	if mode == store.ModeTUN && !s.deps.Elevated() {
+	if mode == store.ModeTUN && !s.elevated() {
 		return fmt.Errorf("TUN mode requires administrator/root privileges")
 	}
 

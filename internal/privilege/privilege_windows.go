@@ -54,11 +54,10 @@ func RelaunchElevated() error {
 		uintptr(unsafe.Pointer(dir)),
 		uintptr(swShowNormal),
 	)
-	// ShellExecuteW returns a value > 32 on success.
+	// ShellExecuteW returns a value > 32 on success; <= 32 is an SE_ERR_* code.
 	if ret <= 32 {
-		// SE_ERR_ACCESSDENIED (5) and ERROR_CANCELLED (1223) both mean the user
-		// declined the UAC prompt.
-		if ret == 5 || ret == 1223 {
+		// Dismissing the UAC prompt surfaces as SE_ERR_ACCESSDENIED (5).
+		if ret == 5 {
 			return ErrElevationDeclined
 		}
 		return fmt.Errorf("ShellExecuteW failed (code %d)", ret)

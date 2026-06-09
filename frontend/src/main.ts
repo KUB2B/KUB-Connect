@@ -230,9 +230,11 @@ function wire() {
   EventsOn("close-requested", () => {
     closeModal.classList.remove("hidden");
   });
-  // Escape dismisses the close-choice modal (same as Отмена).
+  // Escape dismisses the close-choice modal (same as Отмена). Yields to the
+  // elevate modal when both happen to be open (it handles its own Escape).
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !closeModal.classList.contains("hidden")) {
+    const elevateOpen = !$("elevate-modal").classList.contains("hidden");
+    if (e.key === "Escape" && !closeModal.classList.contains("hidden") && !elevateOpen) {
       closeModal.classList.add("hidden");
     }
   });
