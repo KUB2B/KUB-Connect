@@ -88,6 +88,21 @@ func (a *App) startup(ctx context.Context) {
 	a.svc.MaybeAutoConnect()
 }
 
+// shutdown runs when the app is terminating (window closed or quit). It tears
+// down an active connection so platform cleanup — notably clearing the system
+// SOCKS proxy in proxy mode — runs. Without this, closing the window while
+// connected leaves the OS proxy pointed at the dead local port, so browsers
+// fail with ERR_PROXY_CONNECTION_FAILED. Disconnect is idempotent, so calling
+// it when already disconnected is a no-op.
+func (a *App) shutdown(ctx context.Context) {
+	if a.svc == nil {
+		return
+	}
+	if err := a.svc.Disconnect(); err != nil {
+		log.Printf("shutdown disconnect: %v", err)
+	}
+}
+
 func (a *App) GetState() app.StateDTO {
 	if a.svc == nil {
 		return app.StateDTO{}
