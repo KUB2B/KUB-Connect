@@ -1,13 +1,13 @@
-# Установка VLESS Client
+# Установка KUB Connect
 
 ## Windows
 
-1. Скачайте `vless-client-vX.Y.Z-windows-amd64-installer.exe` со страницы
+1. Скачайте `kub-connect-vX.Y.Z-windows-amd64-installer.exe` со страницы
    [Releases](https://github.com/zki/vless-client/releases).
 2. При запуске Windows SmartScreen покажет «Система Windows защитила ваш
    компьютер» — приложение не подписано. Нажмите **Подробнее → Всё равно
    выполнить**.
-3. Пройдите установку, запустите «VLESS Client».
+3. Пройдите установку, запустите «KUB Connect».
 4. На вкладке серверов вставьте `vless://…` ссылку и нажмите добавить.
 5. Выберите режим:
    - **Proxy** — системный SOCKS, без прав администратора.
@@ -16,8 +16,8 @@
 
 ## macOS
 
-1. Скачайте `vless-client-vX.Y.Z-macos-universal.dmg` со страницы Releases.
-2. Откройте `.dmg`, перетащите «VLESS Client» в папку Applications.
+1. Скачайте `kub-connect-vX.Y.Z-macos-universal.dmg` со страницы Releases.
+2. Откройте `.dmg`, перетащите «KUB Connect» в папку Applications.
 3. Запустите приложение (оно подписано и нотаризовано — предупреждений не будет).
 4. Добавьте `vless://…` ссылку, выберите режим **Proxy** и подключитесь.
 

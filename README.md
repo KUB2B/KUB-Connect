@@ -2,7 +2,7 @@
 
 Десктопный VPN-клиент на Go + Wails. VLESS+Xray, whitelist-маршрутизация (Telegram + кастомные IP/домены), proxy и TUN-режимы.
 
-> 📦 **Установка для пользователей:** см. [docs/INSTALL.md](docs/INSTALL.md).
+> 📦 **Установка для пользователей:** см. [docs/INSTALL.md](docs/INSTALL.md) · [docs/USER-GUIDE.md](docs/USER-GUIDE.md).
 
 ## Зависимости
 
