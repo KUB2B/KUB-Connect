@@ -9,6 +9,8 @@ import {
   Connect,
   Disconnect,
   Logs,
+  HideToTray,
+  QuitApp,
 } from "../wailsjs/go/main/App";
 import { EventsOn } from "../wailsjs/runtime";
 
@@ -204,6 +206,28 @@ function wire() {
   });
   $("clear-logs-btn").addEventListener("click", () => {
     $("log-view").textContent = "";
+  });
+
+  // Close-choice modal.
+  const closeModal = $("close-modal");
+  $("modal-hide").addEventListener("click", () => {
+    closeModal.classList.add("hidden");
+    HideToTray();
+  });
+  $("modal-quit").addEventListener("click", () => {
+    QuitApp();
+  });
+  $("modal-cancel").addEventListener("click", () => {
+    closeModal.classList.add("hidden");
+  });
+  EventsOn("close-requested", () => {
+    closeModal.classList.remove("hidden");
+  });
+  // Escape dismisses the close-choice modal (same as Отмена).
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !closeModal.classList.contains("hidden")) {
+      closeModal.classList.add("hidden");
+    }
   });
 
   EventsOn("state", (st: State) => {

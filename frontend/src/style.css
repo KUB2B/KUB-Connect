@@ -73,3 +73,21 @@ label { display: block; margin: 0.4rem 0; }
 }
 
 .version { font-size: 0.72rem; color: var(--muted); text-align: right; padding: 0.3rem 0.6rem; }
+
+/* Close-choice modal */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.6);
+  display: flex; align-items: center; justify-content: center; z-index: 100;
+}
+.modal-overlay.hidden { display: none; }
+.modal {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 1.4rem; width: 320px; max-width: 90vw; box-shadow: 0 12px 40px rgba(0,0,0,.5);
+}
+.modal-title { font-size: 1.05rem; margin: 0 0 0.5rem; }
+.modal-text { font-size: 0.85rem; color: var(--muted); margin: 0 0 1.2rem; }
+.modal-actions { display: flex; flex-direction: column; gap: 0.5rem; }
+.modal-btn { width: 100%; padding: 0.55rem; }
+.modal-btn.primary { background: var(--accent-dim); border-color: var(--accent-dim); color: #fff; }
+.modal-btn.primary:hover { background: var(--accent); }
+.modal-btn.danger { color: var(--error); }

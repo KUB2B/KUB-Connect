@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"log"
 	"os"
 	"path/filepath"
@@ -20,6 +21,15 @@ import (
 	"github.com/zki/vless-client/internal/tun"
 )
 
+// trayIconICO / trayIconPNG are the tray images. Windows uses the .ico; macOS
+// uses the .png (energye/systray renders PNG on darwin).
+//
+//go:embed build/windows/icon.ico
+var trayIconICO []byte
+
+//go:embed build/appicon.png
+var trayIconPNG []byte
+
 // wailsEmitter implements app.Emitter via the Wails runtime.
 type wailsEmitter struct{ ctx context.Context }
 
@@ -27,10 +37,19 @@ func (e wailsEmitter) Emit(event string, data any) {
 	wruntime.EventsEmit(e.ctx, event, data)
 }
 
+// trayIcon returns the platform-appropriate tray image bytes.
+func trayIcon() []byte {
+	if runtime.GOOS == "darwin" {
+		return trayIconPNG
+	}
+	return trayIconICO
+}
+
 // App is the Wails-bound application object.
 type App struct {
-	ctx context.Context
-	svc *app.Service
+	ctx      context.Context
+	svc      *app.Service
+	trayStop func() // tears down the tray on shutdown
 }
 
 func NewApp() *App { return &App{} }
@@ -86,7 +105,60 @@ func (a *App) startup(ctx context.Context) {
 		wruntime.EventsEmit(a.ctx, "log", line)
 	})
 	a.svc.MaybeAutoConnect()
+
+	// Tray: show window, toggle connection, quit. Subscribe to connection
+	// state so the toggle label stays in sync (fires once immediately).
+	// cancel is intentionally not stored; the subscription lives for the app lifetime.
+	_ = a.svc.SubscribeConn(func(c app.ConnState) {
+		updateTrayConn(c == app.ConnConnected)
+	})
+	// Connect/Disconnect run on the systray message-pump goroutine and are
+	// synchronous (Connect launches xray + sets the system proxy, ~1-3s), so run
+	// them off the pump to keep the tray menu responsive during the transition.
+	a.trayStop = startTray(trayIcon(), trayCallbacks{
+		onShow: func() {
+			wruntime.WindowShow(a.ctx)
+			wruntime.WindowUnminimise(a.ctx)
+		},
+		onConnect:    func() { go func() { _ = a.svc.Connect() }() },
+		onDisconnect: func() { go func() { _ = a.svc.Disconnect() }() },
+		onQuit:       func() { wruntime.Quit(a.ctx) },
+	})
 }
+
+// shutdown runs when the app is terminating (window closed or quit). It tears
+// down an active connection so platform cleanup — notably clearing the system
+// SOCKS proxy in proxy mode — runs. Without this, closing the window while
+// connected leaves the OS proxy pointed at the dead local port, so browsers
+// fail with ERR_PROXY_CONNECTION_FAILED. Disconnect is idempotent, so calling
+// it when already disconnected is a no-op.
+func (a *App) shutdown(ctx context.Context) {
+	if a.trayStop != nil {
+		a.trayStop()
+	}
+	if a.svc == nil {
+		return
+	}
+	if err := a.svc.Disconnect(); err != nil {
+		log.Printf("shutdown disconnect: %v", err)
+	}
+}
+
+// beforeClose runs when the user clicks the window close button. It always
+// cancels the native close (returns true) and asks the frontend to show the
+// minimize-or-quit choice. The frontend then calls HideToTray or QuitApp.
+func (a *App) beforeClose(ctx context.Context) (preventClose bool) {
+	wruntime.EventsEmit(a.ctx, "close-requested")
+	return true
+}
+
+// HideToTray hides the window; the app keeps running and is reachable via the
+// tray. Bound to the frontend.
+func (a *App) HideToTray() { wruntime.WindowHide(a.ctx) }
+
+// QuitApp quits the whole app (runs shutdown → Disconnect → proxy cleanup).
+// Bound to the frontend.
+func (a *App) QuitApp() { wruntime.Quit(a.ctx) }
 
 func (a *App) GetState() app.StateDTO {
 	if a.svc == nil {

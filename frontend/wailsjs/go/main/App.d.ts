@@ -10,7 +10,11 @@ export function Disconnect():Promise<void>;
 
 export function GetState():Promise<app.StateDTO>;
 
+export function HideToTray():Promise<void>;
+
 export function Logs():Promise<Array<string>>;
+
+export function QuitApp():Promise<void>;
 
 export function RemoveServer(arg1:number):Promise<void>;
 

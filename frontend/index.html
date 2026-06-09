@@ -73,6 +73,17 @@
 
       <div id="app-version" class="version"></div>
     </div>
+    <div id="close-modal" class="modal-overlay hidden">
+      <div class="modal">
+        <p class="modal-title">Закрыть приложение?</p>
+        <p class="modal-text">Свернуть в трей — приложение продолжит работать в фоне.</p>
+        <div class="modal-actions">
+          <button id="modal-hide" class="modal-btn primary">Свернуть в трей</button>
+          <button id="modal-quit" class="modal-btn danger">Выйти</button>
+          <button id="modal-cancel" class="modal-btn">Отмена</button>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

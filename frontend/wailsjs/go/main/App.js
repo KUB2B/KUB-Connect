@@ -18,8 +18,16 @@ export function GetState() {
   return window['go']['main']['App']['GetState']();
 }
 
+export function HideToTray() {
+  return window['go']['main']['App']['HideToTray']();
+}
+
 export function Logs() {
   return window['go']['main']['App']['Logs']();
+}
+
+export function QuitApp() {
+  return window['go']['main']['App']['QuitApp']();
 }
 
 export function RemoveServer(arg1) {
