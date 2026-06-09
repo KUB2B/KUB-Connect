@@ -35,8 +35,8 @@ func startTray(icon []byte, cb trayCallbacks) (stop func()) {
 
 	onReady := func() {
 		systray.SetIcon(icon)
-		systray.SetTitle("VLESS Client")
-		systray.SetTooltip("VLESS Client")
+		systray.SetTitle("KUB Connect")
+		systray.SetTooltip("KUB Connect")
 		// Left-click shows the window.
 		systray.SetOnClick(func(systray.IMenu) { trayCB.onShow() })
 

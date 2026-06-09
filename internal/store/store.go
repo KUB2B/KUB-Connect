@@ -109,5 +109,5 @@ func DefaultPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "vless-client", "state.json"), nil
+	return filepath.Join(dir, "kub-connect", "state.json"), nil
 }

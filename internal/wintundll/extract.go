@@ -22,7 +22,7 @@ func DefaultDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(base, "vless-client"), nil
+	return filepath.Join(base, "kub-connect"), nil
 }
 
 // extract writes data to destDir/name, returning the full path. The file is

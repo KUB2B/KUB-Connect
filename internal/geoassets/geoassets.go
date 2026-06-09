@@ -18,7 +18,7 @@ func DefaultDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(base, "vless-client", "geo"), nil
+	return filepath.Join(base, "kub-connect", "geo"), nil
 }
 
 // Sync copies the named files from fsys (under srcDir) into destDir. A file is

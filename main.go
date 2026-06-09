@@ -22,7 +22,7 @@ var geoAssets embed.FS
 func main() {
 	a := NewApp()
 	err := wails.Run(&options.App{
-		Title:  "VLESS Client",
+		Title:  "KUB Connect",
 		Width:  900,
 		Height: 640,
 		AssetServer: &assetserver.Options{
