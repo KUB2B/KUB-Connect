@@ -70,6 +70,7 @@ func (s *Service) setConn(c ConnState, errMsg string) {
 	s.conn = c
 	s.lastError = errMsg
 	s.emitState()
+	s.notifyConn()
 }
 
 // Connect builds the config from the active server + profile and starts the

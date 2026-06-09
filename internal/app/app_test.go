@@ -111,3 +111,46 @@ func TestNewLoadsDefaultStateWhenNoFile(t *testing.T) {
 		t.Errorf("default Mode = %q, want tun", st.Settings.Mode)
 	}
 }
+
+func TestSubscribeConnDeliversCurrentStateImmediately(t *testing.T) {
+	svc, _, _, _ := testDeps(t)
+	var got []ConnState
+	cancel := svc.SubscribeConn(func(c ConnState) { got = append(got, c) })
+	defer cancel()
+	if len(got) != 1 || got[0] != ConnDisconnected {
+		t.Fatalf("want [disconnected] on subscribe, got %v", got)
+	}
+}
+
+func TestSubscribeConnDeliversChanges(t *testing.T) {
+	svc, _, _, _ := testDeps(t)
+	var got []ConnState
+	cancel := svc.SubscribeConn(func(c ConnState) { got = append(got, c) })
+	defer cancel()
+	svc.mu.Lock()
+	svc.setConn(ConnConnecting, "")
+	svc.setConn(ConnConnected, "")
+	svc.mu.Unlock()
+	want := []ConnState{ConnDisconnected, ConnConnecting, ConnConnected}
+	if len(got) != len(want) {
+		t.Fatalf("want %v, got %v", want, got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("at %d want %s got %s", i, want[i], got[i])
+		}
+	}
+}
+
+func TestSubscribeConnCancelStopsDelivery(t *testing.T) {
+	svc, _, _, _ := testDeps(t)
+	var n int
+	cancel := svc.SubscribeConn(func(ConnState) { n++ })
+	cancel()
+	svc.mu.Lock()
+	svc.setConn(ConnConnecting, "")
+	svc.mu.Unlock()
+	if n != 1 { // only the immediate on-subscribe delivery
+		t.Fatalf("want 1 delivery before cancel, got %d", n)
+	}
+}

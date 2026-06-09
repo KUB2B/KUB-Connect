@@ -18,6 +18,9 @@ type Service struct {
 	lastError string
 	connector Connector
 	tailStop  func() // cancels the log tailer goroutine; nil when not tailing
+
+	connSubs   map[int]func(ConnState) // conn-state fan-out (tray)
+	connNextID int
 }
 
 // New constructs the service, loading persisted state (or defaults).
@@ -32,10 +35,11 @@ func New(d Deps) (*Service, error) {
 		st.Settings.Mode = store.ModeProxy
 	}
 	return &Service{
-		deps:  d,
-		bus:   logbus.New(2000),
-		state: st,
-		conn:  ConnDisconnected,
+		deps:     d,
+		bus:      logbus.New(2000),
+		state:    st,
+		conn:     ConnDisconnected,
+		connSubs: map[int]func(ConnState){},
 	}, nil
 }
 
@@ -78,4 +82,30 @@ func (s *Service) emitState() {
 // persist writes state to disk. Caller must hold s.mu.
 func (s *Service) persist() error {
 	return store.Save(s.deps.StatePath, s.state)
+}
+
+// SubscribeConn registers fn to receive connection-state changes. fn is called
+// once immediately with the current state, then on every subsequent change. The
+// returned function unsubscribes. fn runs while s.mu is held during change
+// delivery, so it must not block or call back into the Service.
+func (s *Service) SubscribeConn(fn func(ConnState)) (cancel func()) {
+	s.mu.Lock()
+	id := s.connNextID
+	s.connNextID++
+	s.connSubs[id] = fn
+	cur := s.conn
+	s.mu.Unlock()
+	fn(cur)
+	return func() {
+		s.mu.Lock()
+		delete(s.connSubs, id)
+		s.mu.Unlock()
+	}
+}
+
+// notifyConn delivers the current state to conn subscribers. Caller must hold s.mu.
+func (s *Service) notifyConn() {
+	for _, fn := range s.connSubs {
+		fn(s.conn)
+	}
 }
