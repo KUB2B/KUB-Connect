@@ -84,6 +84,16 @@
         </div>
       </div>
     </div>
+    <div id="elevate-modal" class="modal-overlay hidden">
+      <div class="modal">
+        <p class="modal-title">Режим TUN требует прав администратора</p>
+        <p class="modal-text">Чтобы включить TUN, приложение нужно перезапустить с правами администратора. Proxy-режим работает без них.</p>
+        <div class="modal-actions">
+          <button id="elevate-restart" class="modal-btn primary">Перезапустить с правами</button>
+          <button id="elevate-cancel" class="modal-btn">Отмена</button>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
