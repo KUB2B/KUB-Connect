@@ -12,8 +12,9 @@ import {
   HideToTray,
   QuitApp,
   RelaunchElevated,
+  CheckUpdate,
 } from "../wailsjs/go/main/App";
-import { EventsOn } from "../wailsjs/runtime";
+import { EventsOn, BrowserOpenURL } from "../wailsjs/runtime";
 
 type Profile = {
   telegram: boolean;
@@ -268,8 +269,22 @@ function wire() {
   EventsOn("log", (line: string) => appendLog(line));
 }
 
+function checkUpdate() {
+  CheckUpdate().then((info) => {
+    if (!info.available) return;
+    const banner = $("update-banner");
+    $("update-version").textContent = info.version;
+    const link = <HTMLAnchorElement>$("update-link");
+    link.href = "#";
+    link.onclick = (e) => { e.preventDefault(); BrowserOpenURL(info.url); };
+    banner.classList.remove("hidden");
+    $("update-dismiss").onclick = () => banner.classList.add("hidden");
+  }).catch(() => {/* network error — silently ignore */});
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   wire();
   refresh();
   Logs().then((lines) => (lines as string[]).forEach(appendLog));
+  checkUpdate();
 });

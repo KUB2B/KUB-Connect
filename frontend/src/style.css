@@ -91,3 +91,16 @@ label { display: block; margin: 0.4rem 0; }
 .modal-btn.primary { background: var(--accent-dim); border-color: var(--accent-dim); color: #fff; }
 .modal-btn.primary:hover { background: var(--accent); }
 .modal-btn.danger { color: var(--error); }
+
+/* Update banner */
+.update-banner {
+  background: #1c2a1a; border-bottom: 1px solid var(--accent);
+  color: var(--text); font-size: 0.85rem;
+  padding: 0.5rem 1rem; display: flex; align-items: center; gap: 0.5rem;
+}
+.update-banner.hidden { display: none; }
+.update-banner a { color: var(--accent); }
+.update-dismiss {
+  margin-left: auto; background: none; border: none; color: var(--muted);
+  font-size: 0.8rem; padding: 0 0.2rem; line-height: 1; cursor: pointer;
+}

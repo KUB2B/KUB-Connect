@@ -20,6 +20,7 @@ import (
 	"github.com/zki/vless-client/internal/privilege"
 	"github.com/zki/vless-client/internal/store"
 	"github.com/zki/vless-client/internal/tun"
+	"github.com/zki/vless-client/internal/updater"
 )
 
 // trayIconICO / trayIconPNG are the tray images. Windows uses the .ico; macOS
@@ -195,6 +196,27 @@ func (a *App) RelaunchElevated() error {
 	}
 	a.quit()
 	return nil
+}
+
+// UpdateInfo is returned by CheckUpdate. Bound to the frontend.
+type UpdateInfo struct {
+	Available bool   `json:"available"`
+	Version   string `json:"version"`
+	URL       string `json:"url"`
+}
+
+// CheckUpdate queries GitHub releases and reports whether a newer version is
+// available. Safe to call concurrently; network errors return Available=false.
+func (a *App) CheckUpdate() UpdateInfo {
+	rel, err := updater.CheckLatest()
+	if err != nil {
+		return UpdateInfo{}
+	}
+	return UpdateInfo{
+		Available: updater.IsNewer(version, rel.TagName),
+		Version:   rel.TagName,
+		URL:       rel.HTMLURL,
+	}
 }
 
 func (a *App) GetState() app.StateDTO {
