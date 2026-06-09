@@ -179,6 +179,24 @@ func (a *App) quit() {
 	wruntime.Quit(a.ctx)
 }
 
+// RelaunchElevated persists state, launches an elevated instance of the app, and
+// on success quits this (unprivileged) one via quit (so the close is not vetoed).
+// Bound to the frontend; called when the user opts to restart for TUN mode.
+// Returns the error (e.g. privilege.ErrElevationDeclined) so the frontend can
+// revert to proxy mode.
+func (a *App) RelaunchElevated() error {
+	if a.svc != nil {
+		if err := a.svc.Persist(); err != nil {
+			log.Printf("persist before elevate: %v", err)
+		}
+	}
+	if err := privilege.RelaunchElevated(); err != nil {
+		return err
+	}
+	a.quit()
+	return nil
+}
+
 func (a *App) GetState() app.StateDTO {
 	if a.svc == nil {
 		return app.StateDTO{}
