@@ -223,6 +223,12 @@ function wire() {
   EventsOn("close-requested", () => {
     closeModal.classList.remove("hidden");
   });
+  // Escape dismisses the close-choice modal (same as Отмена).
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !closeModal.classList.contains("hidden")) {
+      closeModal.classList.add("hidden");
+    }
+  });
 
   EventsOn("state", (st: State) => {
     current = st;

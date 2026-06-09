@@ -85,9 +85,10 @@ func (s *Service) persist() error {
 }
 
 // SubscribeConn registers fn to receive connection-state changes. fn is called
-// once immediately with the current state, then on every subsequent change. The
-// returned function unsubscribes. fn runs while s.mu is held during change
-// delivery, so it must not block or call back into the Service.
+// once immediately with the current state (without s.mu held), then on every
+// subsequent change while s.mu is held. The returned function unsubscribes.
+// Because change delivery happens under s.mu, fn must not block or call back
+// into the Service.
 func (s *Service) SubscribeConn(fn func(ConnState)) (cancel func()) {
 	s.mu.Lock()
 	id := s.connNextID

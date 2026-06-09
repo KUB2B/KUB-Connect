@@ -108,16 +108,20 @@ func (a *App) startup(ctx context.Context) {
 
 	// Tray: show window, toggle connection, quit. Subscribe to connection
 	// state so the toggle label stays in sync (fires once immediately).
-	a.svc.SubscribeConn(func(c app.ConnState) {
+	// cancel is intentionally not stored; the subscription lives for the app lifetime.
+	_ = a.svc.SubscribeConn(func(c app.ConnState) {
 		updateTrayConn(c == app.ConnConnected)
 	})
+	// Connect/Disconnect run on the systray message-pump goroutine and are
+	// synchronous (Connect launches xray + sets the system proxy, ~1-3s), so run
+	// them off the pump to keep the tray menu responsive during the transition.
 	a.trayStop = startTray(trayIcon(), trayCallbacks{
 		onShow: func() {
 			wruntime.WindowShow(a.ctx)
 			wruntime.WindowUnminimise(a.ctx)
 		},
-		onConnect:    func() { _ = a.svc.Connect() },
-		onDisconnect: func() { _ = a.svc.Disconnect() },
+		onConnect:    func() { go func() { _ = a.svc.Connect() }() },
+		onDisconnect: func() { go func() { _ = a.svc.Disconnect() }() },
 		onQuit:       func() { wruntime.Quit(a.ctx) },
 	})
 }
