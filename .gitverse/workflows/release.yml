@@ -76,7 +76,7 @@ jobs:
           GITV_TOKEN: ${{ secrets.GITV_TOKEN }}
         run: |
           set -euo pipefail
-          API="https://gitverse.ru/api/v1/repos/raynoldripper/KUB-Connect"
+          API="https://api.gitverse.ru/repos/raynoldripper/KUB-Connect"
 
           if [ -z "${GITV_TOKEN:-}" ]; then
             echo "::error::GITV_TOKEN secret is empty/unset — add it in repo Settings > Secrets"
