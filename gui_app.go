@@ -202,7 +202,9 @@ func (a *App) RelaunchElevated(connectAfter bool) error {
 			// Relaunch failed (e.g. UAC declined); this process keeps running, so
 			// clear the intent to avoid a spurious auto-connect on the next start.
 			a.svc.SetPendingConnect(false)
-			_ = a.svc.Persist()
+			if err := a.svc.Persist(); err != nil {
+				log.Printf("clear pending-connect after declined elevation: %v", err)
+			}
 		}
 		return err
 	}
