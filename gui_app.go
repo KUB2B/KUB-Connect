@@ -14,6 +14,7 @@ import (
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/zki/vless-client/internal/app"
+	"github.com/zki/vless-client/internal/autostart"
 	"github.com/zki/vless-client/internal/firewall"
 	"github.com/zki/vless-client/internal/geoassets"
 	"github.com/zki/vless-client/internal/netcfg"
@@ -101,6 +102,7 @@ func (a *App) startup(ctx context.Context) {
 		Elevated:            privilege.IsElevated,
 		KillSwitchSupported: firewall.Supported,
 		TUNSupported:        netcfg.Supported,
+		Autostart:           autostart.New(),
 		OS:                  runtime.GOOS,
 		Version:             version,
 	})
@@ -117,6 +119,7 @@ func (a *App) startup(ctx context.Context) {
 	if !a.svc.ResumePendingConnect() {
 		a.svc.MaybeAutoConnect()
 	}
+	a.svc.ReconcileAutostart()
 
 	// Tray: show window, toggle connection, quit. Subscribe to connection
 	// state so the toggle label stays in sync (fires once immediately).
