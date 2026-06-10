@@ -13,6 +13,7 @@ import {
   QuitApp,
   RelaunchElevated,
   CheckUpdate,
+  Ping,
 } from "../wailsjs/go/main/App";
 import { EventsOn, BrowserOpenURL } from "../wailsjs/runtime";
 
@@ -60,6 +61,10 @@ const STATUS: Record<string, string> = {
 };
 
 let current: State;
+
+// Ephemeral ping results, keyed by `${host}:${port}` so they survive re-renders
+// and index shifts when a server is removed.
+const pingResults: Record<string, string> = {};
 
 function setTab(name: string) {
   document.querySelectorAll<HTMLElement>(".tab").forEach((b) => {
@@ -110,7 +115,21 @@ function render(st: State) {
     const del = document.createElement("button");
     del.textContent = "Удалить";
     del.onclick = () => RemoveServer(i);
-    li.append(pick, del);
+    const key = `${s.host}:${s.port}`;
+    const ping = document.createElement("button");
+    ping.textContent = "Пинг";
+    const result = document.createElement("span");
+    result.className = "ping-result";
+    result.textContent = pingResults[key] ?? "";
+    ping.onclick = () => {
+      result.textContent = "…";
+      Ping(i).then((r) => {
+        const text = r.ok ? `${r.latencyMs} мс` : (r.error || "ошибка");
+        pingResults[key] = text;
+        result.textContent = text;
+      });
+    };
+    li.append(pick, del, ping, result);
     list.append(li);
   });
 
