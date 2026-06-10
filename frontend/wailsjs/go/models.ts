@@ -6,6 +6,7 @@ export namespace app {
 	    tunSupported: boolean;
 	    killSwitchSupported: boolean;
 	    elevated: boolean;
+	    autostartSupported: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new CapsDTO(source);
@@ -18,6 +19,7 @@ export namespace app {
 	        this.tunSupported = source["tunSupported"];
 	        this.killSwitchSupported = source["killSwitchSupported"];
 	        this.elevated = source["elevated"];
+	        this.autostartSupported = source["autostartSupported"];
 	    }
 	}
 	export class ProfileDTO {

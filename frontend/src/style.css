@@ -99,6 +99,7 @@ label { display: block; margin: 0.4rem 0; }
   padding: 0.5rem 1rem; display: flex; align-items: center; gap: 0.5rem;
 }
 .update-banner.hidden { display: none; }
+#autostart-row.hidden { display: none; }
 .update-banner a { color: var(--accent); }
 .update-dismiss {
   margin-left: auto; background: none; border: none; color: var(--muted);

@@ -37,6 +37,7 @@ type Caps = {
   tunSupported: boolean;
   killSwitchSupported: boolean;
   elevated: boolean;
+  autostartSupported: boolean;
 };
 type State = {
   servers: Server[];
@@ -131,6 +132,9 @@ function render(st: State) {
   killToggle.disabled = !st.caps.killSwitchSupported;
   killToggle.title = st.caps.killSwitchSupported ? "" : "Kill switch не поддерживается на этой ОС";
   (<HTMLInputElement>$("mux-toggle")).checked = st.settings.mux;
+  (<HTMLInputElement>$("autostart-toggle")).checked = st.settings.autoStart;
+  (<HTMLInputElement>$("autoconnect-toggle")).checked = st.settings.autoConnect;
+  $("autostart-row").classList.toggle("hidden", !st.caps.autostartSupported);
   (<HTMLSelectElement>$("loglevel-select")).value = st.settings.logLevel || "warning";
 }
 
@@ -224,6 +228,26 @@ function wire() {
   $("mux-toggle").addEventListener("change", () => {
     current.settings.mux = (<HTMLInputElement>$("mux-toggle")).checked;
     pushSettings();
+  });
+  $("autostart-toggle").addEventListener("change", () => {
+    const cb = <HTMLInputElement>$("autostart-toggle");
+    const prev = current.settings.autoStart;
+    current.settings.autoStart = cb.checked;
+    UpdateSettings(current.settings).catch((e) => {
+      current.settings.autoStart = prev;
+      cb.checked = prev;
+      $("error-line").textContent = String(e);
+    });
+  });
+  $("autoconnect-toggle").addEventListener("change", () => {
+    const cb = <HTMLInputElement>$("autoconnect-toggle");
+    const prev = current.settings.autoConnect;
+    current.settings.autoConnect = cb.checked;
+    UpdateSettings(current.settings).catch((e) => {
+      current.settings.autoConnect = prev;
+      cb.checked = prev;
+      $("error-line").textContent = String(e);
+    });
   });
   $("loglevel-select").addEventListener("change", () => {
     current.settings.logLevel = (<HTMLSelectElement>$("loglevel-select")).value;
