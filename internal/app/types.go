@@ -67,6 +67,14 @@ const (
 // the real (proxy-mode) implementation; tests supply a fake.
 type ConnectorFactory func(ConnConfig) (Connector, error)
 
+// AutostartManager registers the app to launch at user login. Satisfied by
+// *autostart.Manager values; nil is treated as unsupported.
+type AutostartManager interface {
+	Supported() bool
+	Enable() error
+	Disable() error
+}
+
 // Deps are the service's injected dependencies.
 type Deps struct {
 	StatePath string           // path to state.json
@@ -84,6 +92,9 @@ type Deps struct {
 	// When false and the persisted mode is TUN, the mode is coerced to proxy at
 	// startup (see New).
 	TUNSupported func() bool
+	// Autostart registers launch-on-login (autostart.New()). Nil is treated as
+	// unsupported, so tests need not set it.
+	Autostart AutostartManager
 	// OS is the runtime GOOS, surfaced to the frontend via Caps.
 	OS string
 	// Version is the build version string, surfaced to the frontend via Caps.
@@ -124,6 +135,7 @@ type CapsDTO struct {
 	TUNSupported        bool   `json:"tunSupported"`
 	KillSwitchSupported bool   `json:"killSwitchSupported"`
 	Elevated            bool   `json:"elevated"`
+	AutostartSupported  bool   `json:"autostartSupported"`
 }
 
 // StateDTO is the full snapshot the frontend renders.

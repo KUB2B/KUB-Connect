@@ -62,6 +62,7 @@ func (s *Service) snapshot() StateDTO {
 			TUNSupported:        s.tunSupported(),
 			KillSwitchSupported: s.killSwitchSupported(),
 			Elevated:            s.elevated(),
+			AutostartSupported:  s.autostartSupported(),
 		},
 	}
 }
