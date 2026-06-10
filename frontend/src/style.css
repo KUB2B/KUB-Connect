@@ -62,9 +62,9 @@ button {
 button:hover { background: #28303a; }
 ul { list-style: none; padding: 0; }
 li { display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0; }
-li.active span { font-weight: 600; color: var(--accent); }
-li span { flex: 1; }
-.ping-result { margin-left: 0.5rem; opacity: 0.8; font-size: 0.85em; }
+li.active span:first-of-type { font-weight: 600; color: var(--accent); }
+li span:first-of-type { flex: 1; }
+.ping-result { flex: none; margin-left: 0.5rem; opacity: 0.8; font-size: 0.85em; color: var(--muted); font-weight: normal; }
 label { display: block; margin: 0.4rem 0; }
 .error { color: var(--error); min-height: 1em; font-size: 0.85rem; }
 

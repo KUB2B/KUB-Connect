@@ -123,11 +123,16 @@ function render(st: State) {
     result.textContent = pingResults[key] ?? "";
     ping.onclick = () => {
       result.textContent = "…";
-      Ping(i).then((r) => {
-        const text = r.ok ? `${r.latencyMs} мс` : (r.error || "ошибка");
-        pingResults[key] = text;
-        result.textContent = text;
-      });
+      Ping(i)
+        .then((r) => {
+          const text = r.ok ? `${r.latencyMs} мс` : (r.error || "ошибка");
+          pingResults[key] = text;
+          result.textContent = text;
+        })
+        .catch(() => {
+          pingResults[key] = "ошибка";
+          result.textContent = "ошибка";
+        });
     };
     li.append(pick, del, ping, result);
     list.append(li);
