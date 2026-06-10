@@ -75,19 +75,49 @@ jobs:
         env:
           GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
         run: |
+          set -euo pipefail
+          API="https://gitverse.ru/api/v1/repos/raynoldripper/KUB-Connect"
+
+          if [ -z "${GITEA_TOKEN:-}" ]; then
+            echo "::error::GITEA_TOKEN secret is empty/unset — add it in repo Settings > Secrets"
+            exit 1
+          fi
+
           BODY=$(cat release-notes.md | jq -Rs .)
           IS_PRE=$( echo "${GITHUB_REF_NAME}" | grep -q '-' && echo true || echo false )
 
-          RELEASE_ID=$(curl -s -X POST \
-            "https://gitverse.ru/api/v1/repos/raynoldripper/KUB-Connect/releases" \
+          echo "Creating release ${GITHUB_REF_NAME} ..."
+          RESP=$(curl -sS -w "\n%{http_code}" -X POST "${API}/releases" \
             -H "Authorization: token ${GITEA_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d "{\"tag_name\":\"${GITHUB_REF_NAME}\",\"name\":\"${GITHUB_REF_NAME}\",\"body\":${BODY},\"draft\":false,\"prerelease\":${IS_PRE}}" \
-            | jq -r '.id')
+            -d "{\"tag_name\":\"${GITHUB_REF_NAME}\",\"name\":\"${GITHUB_REF_NAME}\",\"body\":${BODY},\"draft\":false,\"prerelease\":${IS_PRE}}")
+          CODE=$(echo "$RESP" | tail -n1)
+          JSON=$(echo "$RESP" | sed '$d')
+          echo "HTTP ${CODE}"
+          echo "$JSON"
+
+          if [ "$CODE" -lt 200 ] || [ "$CODE" -ge 300 ]; then
+            echo "::error::Release creation failed (HTTP ${CODE})"
+            exit 1
+          fi
+
+          RELEASE_ID=$(echo "$JSON" | jq -r '.id')
+          if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
+            echo "::error::No release id in API response"
+            exit 1
+          fi
+          echo "Release id: ${RELEASE_ID}"
 
           for FILE in kub-connect-*-linux-amd64 kub-connect-*-windows-amd64.exe; do
-            curl -s -X POST \
-              "https://gitverse.ru/api/v1/repos/raynoldripper/KUB-Connect/releases/${RELEASE_ID}/assets" \
+            [ -e "$FILE" ] || { echo "::error::asset missing: $FILE"; exit 1; }
+            echo "Uploading ${FILE} ..."
+            ACODE=$(curl -sS -o /dev/null -w "%{http_code}" -X POST \
+              "${API}/releases/${RELEASE_ID}/assets" \
               -H "Authorization: token ${GITEA_TOKEN}" \
-              -F "attachment=@${FILE}"
+              -F "attachment=@${FILE}")
+            echo "  HTTP ${ACODE}"
+            if [ "$ACODE" -lt 200 ] || [ "$ACODE" -ge 300 ]; then
+              echo "::error::asset upload failed for ${FILE} (HTTP ${ACODE})"
+              exit 1
+            fi
           done
