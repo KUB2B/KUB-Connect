@@ -157,12 +157,28 @@ function wire() {
     b.addEventListener("click", () => setTab(b.dataset.tab!));
   });
 
+  // Distinguishes how the elevate modal was opened: from the power button
+  // (connect intent — auto-connect after restart, cancel leaves TUN as-is) vs
+  // from the mode dropdown (cancel reverts to proxy).
+  let elevateForConnect = false;
+
   // Power button: toggle based on current state.
   $("power-btn").addEventListener("click", () => {
     const c = current?.conn;
     if (c === "connected") {
       Disconnect().catch((e) => ($("error-line").textContent = String(e)));
     } else if (c === "disconnected" || c === "error") {
+      // TUN needs admin. If unelevated, offer restart-with-admin instead of a
+      // doomed Connect that the backend would reject.
+      if (
+        current.settings.mode === "tun" &&
+        current.caps.tunSupported &&
+        !current.caps.elevated
+      ) {
+        elevateForConnect = true;
+        $("elevate-modal").classList.remove("hidden");
+        return;
+      }
       Connect().catch((e) => ($("error-line").textContent = String(e)));
     }
     // connecting/disconnecting: ignore.
@@ -197,6 +213,7 @@ function wire() {
     pushSettings();
     // TUN needs admin. If we are not elevated, offer a restart-with-admin.
     if (val === "tun" && current.caps.tunSupported && !current.caps.elevated) {
+      elevateForConnect = false;
       $("elevate-modal").classList.remove("hidden");
     }
   });
@@ -242,23 +259,28 @@ function wire() {
 
   // Elevate (restart-with-admin) modal.
   const elevateModal = $("elevate-modal");
-  const revertToProxy = () => {
+  // Close the modal. When opened from the mode dropdown (revert=true) we fall
+  // back to proxy; when opened from the power button we leave the mode as TUN.
+  const closeElevate = (revert: boolean) => {
     elevateModal.classList.add("hidden");
-    const sel = <HTMLSelectElement>$("mode-select");
-    sel.value = "proxy";
-    current.settings.mode = "proxy";
-    pushSettings();
+    if (revert) {
+      const sel = <HTMLSelectElement>$("mode-select");
+      sel.value = "proxy";
+      current.settings.mode = "proxy";
+      pushSettings();
+    }
+    elevateForConnect = false;
   };
   $("elevate-restart").addEventListener("click", () => {
-    RelaunchElevated().catch((e) => {
-      revertToProxy();
+    RelaunchElevated(elevateForConnect).catch((e) => {
+      closeElevate(!elevateForConnect);
       $("error-line").textContent = String(e);
     });
   });
-  $("elevate-cancel").addEventListener("click", revertToProxy);
+  $("elevate-cancel").addEventListener("click", () => closeElevate(!elevateForConnect));
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && !elevateModal.classList.contains("hidden")) {
-      revertToProxy();
+      closeElevate(!elevateForConnect);
     }
   });
 
