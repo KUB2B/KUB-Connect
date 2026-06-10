@@ -128,6 +128,13 @@ type SettingsDTO struct {
 	LogLevel    string `json:"logLevel"`
 }
 
+// PingResultDTO is the outcome of a server reachability test.
+type PingResultDTO struct {
+	OK        bool   `json:"ok"`
+	LatencyMs int    `json:"latencyMs"`
+	Error     string `json:"error"`
+}
+
 // CapsDTO tells the frontend what this build/platform supports.
 type CapsDTO struct {
 	OS                  string `json:"os"`
