@@ -24,7 +24,9 @@ func (s *Service) UpdateProfile(p ProfileDTO) error {
 	return nil
 }
 
-// UpdateSettings replaces app settings after validating the capture mode.
+// UpdateSettings replaces app settings after validating the capture mode. An
+// AutoStart change is applied to the OS before the new settings are committed,
+// so a failure leaves state unchanged.
 func (s *Service) UpdateSettings(in SettingsDTO) error {
 	mode := store.Mode(in.Mode)
 	if mode != store.ModeProxy && mode != store.ModeTUN {
@@ -32,6 +34,11 @@ func (s *Service) UpdateSettings(in SettingsDTO) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if in.AutoStart != s.state.Settings.AutoStart {
+		if err := s.applyAutostart(in.AutoStart); err != nil {
+			return err // state not modified; frontend reverts the toggle
+		}
+	}
 	s.state.Settings = store.Settings{
 		Mode:        mode,
 		AutoConnect: in.AutoConnect,
