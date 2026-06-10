@@ -73,13 +73,13 @@ jobs:
 
       - name: Create release via Gitea API
         env:
-          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
+          GITV_TOKEN: ${{ secrets.GITV_TOKEN }}
         run: |
           set -euo pipefail
           API="https://gitverse.ru/api/v1/repos/raynoldripper/KUB-Connect"
 
-          if [ -z "${GITEA_TOKEN:-}" ]; then
-            echo "::error::GITEA_TOKEN secret is empty/unset — add it in repo Settings > Secrets"
+          if [ -z "${GITV_TOKEN:-}" ]; then
+            echo "::error::GITV_TOKEN secret is empty/unset — add it in repo Settings > Secrets"
             exit 1
           fi
 
@@ -88,7 +88,7 @@ jobs:
 
           echo "Creating release ${GITHUB_REF_NAME} ..."
           RESP=$(curl -sS -w "\n%{http_code}" -X POST "${API}/releases" \
-            -H "Authorization: token ${GITEA_TOKEN}" \
+            -H "Authorization: token ${GITV_TOKEN}" \
             -H "Content-Type: application/json" \
             -d "{\"tag_name\":\"${GITHUB_REF_NAME}\",\"name\":\"${GITHUB_REF_NAME}\",\"body\":${BODY},\"draft\":false,\"prerelease\":${IS_PRE}}")
           CODE=$(echo "$RESP" | tail -n1)
@@ -113,7 +113,7 @@ jobs:
             echo "Uploading ${FILE} ..."
             ACODE=$(curl -sS -o /dev/null -w "%{http_code}" -X POST \
               "${API}/releases/${RELEASE_ID}/assets" \
-              -H "Authorization: token ${GITEA_TOKEN}" \
+              -H "Authorization: token ${GITV_TOKEN}" \
               -F "attachment=@${FILE}")
             echo "  HTTP ${ACODE}"
             if [ "$ACODE" -lt 200 ] || [ "$ACODE" -ge 300 ]; then
