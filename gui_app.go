@@ -119,7 +119,9 @@ func (a *App) startup(ctx context.Context) {
 	if !a.svc.ResumePendingConnect() {
 		a.svc.MaybeAutoConnect()
 	}
-	a.svc.ReconcileAutostart()
+	// Fire-and-forget: refreshing the OS login entry may spawn launchctl on
+	// macOS; keep it off the startup path so the window appears promptly.
+	go a.svc.ReconcileAutostart()
 
 	// Tray: show window, toggle connection, quit. Subscribe to connection
 	// state so the toggle label stays in sync (fires once immediately).

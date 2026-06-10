@@ -2,6 +2,8 @@ package app
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -110,5 +112,28 @@ func TestUpdateSettingsAutostartErrorNotPersisted(t *testing.T) {
 	svc2, _ := New(svc.deps)
 	if svc2.GetState().Settings.AutoStart {
 		t.Error("AutoStart should not have been persisted")
+	}
+}
+
+func TestUpdateSettingsAutostartRolledBackOnPersistFailure(t *testing.T) {
+	svc, _, _, _ := testDeps(t)
+	fa := &fakeAutostart{supported: true}
+	svc.deps.Autostart = fa
+	// Force persist to fail: point StatePath at a child of a regular file so
+	// MkdirAll on its parent errors.
+	blocker := filepath.Join(t.TempDir(), "afile")
+	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	svc.deps.StatePath = filepath.Join(blocker, "state.json")
+
+	if err := svc.UpdateSettings(SettingsDTO{Mode: "proxy", AutoStart: true}); err == nil {
+		t.Fatal("expected persist error")
+	}
+	if fa.enableCalls != 1 || fa.disableCalls != 1 {
+		t.Errorf("want enable=1 (apply) + disable=1 (rollback), got enable=%d disable=%d", fa.enableCalls, fa.disableCalls)
+	}
+	if svc.GetState().Settings.AutoStart {
+		t.Error("AutoStart should be rolled back to false in memory")
 	}
 }

@@ -2,6 +2,11 @@
 // concrete Manager is per-OS; obtain one with New().
 package autostart
 
+import (
+	"bytes"
+	"encoding/xml"
+)
+
 // Manager controls launch-on-login registration.
 type Manager interface {
 	// Supported reports whether autostart is implemented on this OS.
@@ -18,22 +23,30 @@ type Manager interface {
 const macLabel = "pro.qb2b.kub-connect"
 
 // plistContent builds a macOS LaunchAgent plist for the given label and exe path.
+// Both values are XML-escaped so a path containing &, <, or > yields valid XML.
 func plistContent(label, execPath string) string {
 	return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
 	<key>Label</key>
-	<string>` + label + `</string>
+	<string>` + xmlEscape(label) + `</string>
 	<key>ProgramArguments</key>
 	<array>
-		<string>` + execPath + `</string>
+		<string>` + xmlEscape(execPath) + `</string>
 	</array>
 	<key>RunAtLoad</key>
 	<true/>
 </dict>
 </plist>
 `
+}
+
+// xmlEscape returns s with XML metacharacters escaped for use in element text.
+func xmlEscape(s string) string {
+	var b bytes.Buffer
+	_ = xml.EscapeText(&b, []byte(s))
+	return b.String()
 }
 
 // runValue builds the Windows Run registry value: the exe path wrapped in quotes

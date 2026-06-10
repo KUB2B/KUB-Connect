@@ -19,6 +19,16 @@ func TestPlistContent(t *testing.T) {
 	}
 }
 
+func TestPlistContentEscapesPath(t *testing.T) {
+	out := plistContent("lbl", "/Apps/AT&T <x>/app")
+	if strings.Contains(out, "AT&T <x>") {
+		t.Errorf("path not XML-escaped in:\n%s", out)
+	}
+	if !strings.Contains(out, "AT&amp;T &lt;x&gt;") {
+		t.Errorf("expected escaped path, got:\n%s", out)
+	}
+}
+
 func TestRunValue(t *testing.T) {
 	got := runValue(`C:\Program Files\KUB Connect\kub-connect.exe`)
 	want := `"C:\Program Files\KUB Connect\kub-connect.exe"`
