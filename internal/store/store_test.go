@@ -89,3 +89,29 @@ func TestLoadMissingReturnsDefault(t *testing.T) {
 		t.Errorf("default profile should have Telegram on")
 	}
 }
+
+func TestSaveLoadRoundTripPendingConnect(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	in := &State{
+		ActiveServer:   -1,
+		Profile:        routing.Default(),
+		Settings:       Settings{Mode: ModeTUN, LogLevel: LogNormal},
+		PendingConnect: true,
+	}
+	if err := Save(path, in); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	out, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !out.PendingConnect {
+		t.Error("PendingConnect should survive round-trip")
+	}
+}
+
+func TestDefaultStatePendingConnectFalse(t *testing.T) {
+	if DefaultState().PendingConnect {
+		t.Error("DefaultState PendingConnect should be false")
+	}
+}

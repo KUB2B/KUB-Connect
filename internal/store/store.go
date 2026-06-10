@@ -62,6 +62,10 @@ type State struct {
 	ActiveServer int                   `json:"activeServer"`
 	Profile      routing.Profile       `json:"profile"`
 	Settings     Settings              `json:"settings"`
+	// PendingConnect is a one-shot intent set before an elevated restart so the
+	// new instance auto-connects once, regardless of the AutoConnect setting.
+	// Cleared after it is consumed on startup.
+	PendingConnect bool `json:"pendingConnect"`
 }
 
 // DefaultState returns the initial state for a fresh install.
