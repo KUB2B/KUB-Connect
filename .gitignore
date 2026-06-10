@@ -12,9 +12,11 @@ frontend/dist/
 *-installer.exe
 # OS
 .DS_Store
+*:Zone.Identifier
 
-# JetBrains IDE
+# IDE
 .idea/
+.vscode/
 
 # Superpowers brainstorm sessions
 .superpowers/

@@ -14,7 +14,7 @@ command -v makensis >/dev/null || { echo "makensis missing (install: apt install
 wails build -platform windows/amd64 -tags wails \
   -ldflags "-X main.version=${VER}" -nsis
 
-cp build/bin/vless-client-amd64-installer.exe \
-   "${OUT}/vless-client-${VER}-windows-amd64-installer.exe"
+cp build/bin/kub-connect-amd64-installer.exe \
+   "${OUT}/kub-connect-${VER}-windows-amd64-installer.exe"
 
-echo "Windows artifact: ${OUT}/vless-client-${VER}-windows-amd64-installer.exe (UNSIGNED)"
+echo "Windows artifact: ${OUT}/kub-connect-${VER}-windows-amd64-installer.exe (UNSIGNED)"

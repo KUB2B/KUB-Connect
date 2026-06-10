@@ -5,16 +5,16 @@
 !include "FileFunc.nsh"
 
 !ifndef INFO_PROJECTNAME
-    !define INFO_PROJECTNAME "vless-client"
+    !define INFO_PROJECTNAME "kub-connect"
 !endif
 !ifndef INFO_COMPANYNAME
     !define INFO_COMPANYNAME "qb2b"
 !endif
 !ifndef INFO_PRODUCTNAME
-    !define INFO_PRODUCTNAME "VLESS Client"
+    !define INFO_PRODUCTNAME "KUB Connect"
 !endif
 !ifndef INFO_PRODUCTVERSION
-    !define INFO_PRODUCTVERSION "0.1.0"
+    !define INFO_PRODUCTVERSION "1.0.0"
 !endif
 !ifndef INFO_COPYRIGHT
     !define INFO_COPYRIGHT "Copyright © 2026 qb2b"
