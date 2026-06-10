@@ -6,6 +6,7 @@
 # Wails
 frontend/node_modules/
 frontend/dist/
+!frontend/dist/.gitkeep
 # Release artifacts
 /build/release/
 *.dmg
