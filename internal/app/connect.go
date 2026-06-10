@@ -208,3 +208,34 @@ func (s *Service) Logs() []string {
 func (s *Service) SubscribeLogs(fn func(string)) (cancel func()) {
 	return s.bus.Subscribe(fn)
 }
+
+// SetPendingConnect sets the one-shot connect-after-restart intent. Called by
+// the GUI before an elevated restart so the new instance connects once.
+func (s *Service) SetPendingConnect(v bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.state.PendingConnect = v
+}
+
+// ResumePendingConnect connects once if a pending-connect intent was persisted
+// (set before an elevated restart). The flag is cleared on disk regardless of
+// the connection outcome. Returns true if the intent was present (so the caller
+// can skip the normal AutoConnect path). A connection failure is non-fatal:
+// it is recorded in state/logs via Connect.
+func (s *Service) ResumePendingConnect() bool {
+	s.mu.Lock()
+	pending := s.state.PendingConnect
+	if pending {
+		s.state.PendingConnect = false
+		if err := s.persist(); err != nil {
+			s.bus.Append("error: clear pending-connect: " + err.Error())
+		}
+	}
+	s.mu.Unlock()
+
+	if !pending {
+		return false
+	}
+	_ = s.Connect()
+	return true
+}
