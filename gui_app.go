@@ -257,3 +257,11 @@ func (a *App) Logs() []string {
 	}
 	return a.svc.Logs()
 }
+
+// Ping measures TCP connect latency to the server at index. Bound to the frontend.
+func (a *App) Ping(index int) app.PingResultDTO {
+	if a.svc == nil {
+		return app.PingResultDTO{Error: "сервис не готов"}
+	}
+	return a.svc.Ping(index)
+}

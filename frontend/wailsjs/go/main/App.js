@@ -30,6 +30,10 @@ export function Logs() {
   return window['go']['main']['App']['Logs']();
 }
 
+export function Ping(arg1) {
+  return window['go']['main']['App']['Ping'](arg1);
+}
+
 export function QuitApp() {
   return window['go']['main']['App']['QuitApp']();
 }

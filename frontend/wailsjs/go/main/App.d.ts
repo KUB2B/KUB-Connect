@@ -17,6 +17,8 @@ export function HideToTray():Promise<void>;
 
 export function Logs():Promise<Array<string>>;
 
+export function Ping(arg1:number):Promise<app.PingResultDTO>;
+
 export function QuitApp():Promise<void>;
 
 export function RelaunchElevated(arg1:boolean):Promise<void>;

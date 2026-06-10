@@ -22,6 +22,22 @@ export namespace app {
 	        this.autostartSupported = source["autostartSupported"];
 	    }
 	}
+	export class PingResultDTO {
+	    ok: boolean;
+	    latencyMs: number;
+	    error: string;
+
+	    static createFrom(source: any = {}) {
+	        return new PingResultDTO(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ok = source["ok"];
+	        this.latencyMs = source["latencyMs"];
+	        this.error = source["error"];
+	    }
+	}
 	export class ProfileDTO {
 	    telegram: boolean;
 	    forceRUDirect: boolean;
