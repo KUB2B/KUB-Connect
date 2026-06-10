@@ -34,8 +34,8 @@ export function QuitApp() {
   return window['go']['main']['App']['QuitApp']();
 }
 
-export function RelaunchElevated() {
-  return window['go']['main']['App']['RelaunchElevated']();
+export function RelaunchElevated(arg1) {
+  return window['go']['main']['App']['RelaunchElevated'](arg1);
 }
 
 export function RemoveServer(arg1) {

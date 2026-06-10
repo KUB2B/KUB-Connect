@@ -19,7 +19,7 @@ export function Logs():Promise<Array<string>>;
 
 export function QuitApp():Promise<void>;
 
-export function RelaunchElevated():Promise<void>;
+export function RelaunchElevated(arg1:boolean):Promise<void>;
 
 export function RemoveServer(arg1:number):Promise<void>;
 
