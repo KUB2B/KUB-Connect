@@ -112,7 +112,11 @@ func (a *App) startup(ctx context.Context) {
 	a.svc.SubscribeLogs(func(line string) {
 		wruntime.EventsEmit(a.ctx, "log", line)
 	})
-	a.svc.MaybeAutoConnect()
+	// A pending-connect intent (set before an elevated restart) takes priority
+	// over the normal AutoConnect setting; consume it once, else auto-connect.
+	if !a.svc.ResumePendingConnect() {
+		a.svc.MaybeAutoConnect()
+	}
 
 	// Tray: show window, toggle connection, quit. Subscribe to connection
 	// state so the toggle label stays in sync (fires once immediately).
@@ -183,15 +187,23 @@ func (a *App) quit() {
 // RelaunchElevated persists state, launches an elevated instance of the app, and
 // on success quits this (unprivileged) one via quit (so the close is not vetoed).
 // Bound to the frontend; called when the user opts to restart for TUN mode.
-// Returns the error (e.g. privilege.ErrElevationDeclined) so the frontend can
-// revert to proxy mode.
-func (a *App) RelaunchElevated() error {
+// When connectAfter is true a one-shot intent is persisted so the elevated
+// instance auto-connects once on startup. Returns the error (e.g.
+// privilege.ErrElevationDeclined) so the frontend can revert.
+func (a *App) RelaunchElevated(connectAfter bool) error {
 	if a.svc != nil {
+		a.svc.SetPendingConnect(connectAfter)
 		if err := a.svc.Persist(); err != nil {
 			log.Printf("persist before elevate: %v", err)
 		}
 	}
 	if err := privilege.RelaunchElevated(); err != nil {
+		if a.svc != nil {
+			// Relaunch failed (e.g. UAC declined); this process keeps running, so
+			// clear the intent to avoid a spurious auto-connect on the next start.
+			a.svc.SetPendingConnect(false)
+			_ = a.svc.Persist()
+		}
 		return err
 	}
 	a.quit()
