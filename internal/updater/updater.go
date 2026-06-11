@@ -1,8 +1,12 @@
 package updater
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -71,6 +75,66 @@ func IsNewer(current, latestTag string) bool {
 		return strings.TrimPrefix(latestTag, "v") != strings.TrimPrefix(current, "v")
 	}
 	return semver.Compare(lat, cur) > 0
+}
+
+// progressWriter counts bytes written and reports cumulative progress.
+type progressWriter struct {
+	done, total int64
+	cb          func(done, total int64)
+}
+
+func (w *progressWriter) Write(p []byte) (int, error) {
+	n := len(p)
+	w.done += int64(n)
+	if w.cb != nil {
+		w.cb(w.done, w.total)
+	}
+	return n, nil
+}
+
+// Download streams the asset to dst over HTTPS, calling progress(done, total)
+// as bytes arrive (progress may be nil). total is the response Content-Length,
+// falling back to a.Size when the server omits it. On any error, or when the
+// written size disagrees with a known a.Size, the partial file is removed.
+func Download(ctx context.Context, a Asset, dst string, progress func(done, total int64)) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, a.URL, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("download %s: HTTP %d", a.Name, resp.StatusCode)
+	}
+
+	total := resp.ContentLength
+	if total <= 0 {
+		total = a.Size
+	}
+
+	f, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	pw := &progressWriter{total: total, cb: progress}
+	written, copyErr := io.Copy(f, io.TeeReader(resp.Body, pw))
+	closeErr := f.Close()
+	if copyErr != nil {
+		os.Remove(dst)
+		return copyErr
+	}
+	if closeErr != nil {
+		os.Remove(dst)
+		return closeErr
+	}
+	if a.Size > 0 && written != a.Size {
+		os.Remove(dst)
+		return fmt.Errorf("download %s: size mismatch got %d want %d", a.Name, written, a.Size)
+	}
+	return nil
 }
 
 // withV ensures a leading "v" so the value is canonical-form semver.
