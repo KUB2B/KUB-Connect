@@ -29,5 +29,20 @@ func downCommands(c Config) [][]string {
 }
 
 
-func (linuxRouter) Up(c Config) error   { return runAll(upCommands(c)) }
-func (linuxRouter) Down(c Config) error { return runAll(downCommands(c)) }
+func (linuxRouter) Up(c Config) error {
+	if c.FullTunnel {
+		gw, dev, err := defaultGateway()
+		if err != nil {
+			return err
+		}
+		return runAll(linuxFullUpCommands(c, gw, dev))
+	}
+	return runAll(upCommands(c))
+}
+
+func (linuxRouter) Down(c Config) error {
+	if c.FullTunnel {
+		return runAll(linuxFullDownCommands(c))
+	}
+	return runAll(downCommands(c))
+}
