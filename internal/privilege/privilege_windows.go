@@ -65,6 +65,33 @@ func RelaunchElevated() error {
 	return nil
 }
 
+// RunElevated launches an arbitrary executable via the UAC "runas" verb. The
+// installer carries an admin manifest, so a plain exec.Command (CreateProcess)
+// would fail with ERROR_ELEVATION_REQUIRED; ShellExecuteW surfaces the prompt.
+// Returns ErrElevationDeclined if the user dismisses UAC.
+func RunElevated(path string) error {
+	verb, _ := syscall.UTF16PtrFromString("runas")
+	file, _ := syscall.UTF16PtrFromString(path)
+	dir, _ := syscall.UTF16PtrFromString(filepath.Dir(path))
+
+	const swShowNormal = 1
+	ret, _, _ := procShellExecute.Call(
+		0,
+		uintptr(unsafe.Pointer(verb)),
+		uintptr(unsafe.Pointer(file)),
+		0,
+		uintptr(unsafe.Pointer(dir)),
+		uintptr(swShowNormal),
+	)
+	if ret <= 32 {
+		if ret == 5 { // SE_ERR_ACCESSDENIED — UAC dismissed
+			return ErrElevationDeclined
+		}
+		return fmt.Errorf("ShellExecuteW failed (code %d)", ret)
+	}
+	return nil
+}
+
 // joinArgs builds a Windows command-line parameter string, quoting args that
 // contain whitespace or quotes. This build passes no runtime args, so the
 // result is normally empty; quoting is defensive.
