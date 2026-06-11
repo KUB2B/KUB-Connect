@@ -12,6 +12,7 @@ func (s *Service) UpdateProfile(p ProfileDTO) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.state.Profile = routing.Profile{
+		Full:               p.Full,
 		Telegram:           p.Telegram,
 		ForceRUDirect:      p.ForceRUDirect,
 		CustomProxyDomains: p.CustomProxyDomains,

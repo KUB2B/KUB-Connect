@@ -49,6 +49,10 @@ type ConnConfig struct {
 	RouteCIDRs []string
 	KillSwitch bool
 	LogLevel   string
+	// Full-tunnel (TUN mode) fields, set only when Profile.Full is enabled.
+	FullTunnel bool     // route everything into the TUN (split-default + bypass)
+	ServerIPs  []string // server IPv4s to bypass via the physical gateway
+	BlockIPv6  bool     // capture + blackhole IPv6 while connected
 }
 
 // TUN device defaults. 198.18.0.0/15 is the benchmarking range (RFC 2544),
@@ -112,6 +116,7 @@ type ServerDTO struct {
 
 // ProfileDTO mirrors routing.Profile for the frontend.
 type ProfileDTO struct {
+	Full               bool     `json:"full"`
 	Telegram           bool     `json:"telegram"`
 	ForceRUDirect      bool     `json:"forceRUDirect"`
 	CustomProxyDomains []string `json:"customProxyDomains"`
@@ -168,6 +173,7 @@ func serverDTO(s *vless.ServerConfig) ServerDTO {
 
 func profileDTO(p routing.Profile) ProfileDTO {
 	return ProfileDTO{
+		Full:               p.Full,
 		Telegram:           p.Telegram,
 		ForceRUDirect:      p.ForceRUDirect,
 		CustomProxyDomains: p.CustomProxyDomains,
