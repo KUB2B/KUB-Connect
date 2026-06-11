@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const apiURL = "https://api.gitverse.ru/repos/raynoldripper/KUB-Connect/releases/latest"
+const apiURL = "https://api.github.com/repos/KUB2B/KUB-Connect/releases/latest"
 
 type Release struct {
 	TagName string `json:"tag_name"`
