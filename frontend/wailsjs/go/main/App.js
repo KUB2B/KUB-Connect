@@ -10,6 +10,10 @@ export function CheckUpdate() {
   return window['go']['main']['App']['CheckUpdate']();
 }
 
+export function DownloadAndInstall() {
+  return window['go']['main']['App']['DownloadAndInstall']();
+}
+
 export function Connect() {
   return window['go']['main']['App']['Connect']();
 }

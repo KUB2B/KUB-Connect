@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	_ "embed"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -245,6 +246,36 @@ func (a *App) CheckUpdate() UpdateInfo {
 		Version:   rel.TagName,
 		URL:       rel.HTMLURL,
 	}
+}
+
+// DownloadAndInstall fetches the latest Windows installer, streaming download
+// progress to the frontend via "update-progress" events, launches it (UAC),
+// then quits this instance so NSIS can overwrite the running exe. Returns an
+// error (without quitting) if no installer asset exists, the download fails, or
+// the user declines UAC, so the frontend can restore the banner.
+func (a *App) DownloadAndInstall() error {
+	rel, err := updater.CheckLatest()
+	if err != nil {
+		return fmt.Errorf("проверка обновления: %w", err)
+	}
+	asset, ok := updater.PickInstaller(rel)
+	if !ok {
+		return fmt.Errorf("установщик не найден в релизе %s", rel.TagName)
+	}
+
+	dst := filepath.Join(os.TempDir(), fmt.Sprintf("kub-connect-%s-installer.exe", rel.TagName))
+	err = updater.Download(a.ctx, asset, dst, func(done, total int64) {
+		wruntime.EventsEmit(a.ctx, "update-progress", map[string]int64{"done": done, "total": total})
+	})
+	if err != nil {
+		return fmt.Errorf("скачивание: %w", err)
+	}
+
+	if err := privilege.RunElevated(dst); err != nil {
+		return fmt.Errorf("запуск установщика: %w", err)
+	}
+	a.quit()
+	return nil
 }
 
 func (a *App) GetState() app.StateDTO {
