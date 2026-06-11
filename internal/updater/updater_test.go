@@ -36,3 +36,21 @@ func TestIsNewer(t *testing.T) {
 		}
 	}
 }
+
+func TestPickInstaller(t *testing.T) {
+	rel := Release{Assets: []Asset{
+		{Name: "KUB-Connect.dmg", URL: "https://x/dmg", Size: 10},
+		{Name: "kub-connect-amd64-installer.exe", URL: "https://x/exe", Size: 20},
+	}}
+	a, ok := PickInstaller(rel)
+	if !ok {
+		t.Fatal("PickInstaller: expected ok=true")
+	}
+	if a.Name != "kub-connect-amd64-installer.exe" || a.URL != "https://x/exe" {
+		t.Errorf("PickInstaller picked wrong asset: %+v", a)
+	}
+
+	if _, ok := PickInstaller(Release{Assets: []Asset{{Name: "notes.txt"}}}); ok {
+		t.Error("PickInstaller: expected ok=false when no installer asset")
+	}
+}

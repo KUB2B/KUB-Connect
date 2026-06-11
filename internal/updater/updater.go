@@ -11,9 +11,29 @@ import (
 
 const apiURL = "https://api.github.com/repos/KUB2B/KUB-Connect/releases/latest"
 
+type Asset struct {
+	Name string `json:"name"`
+	URL  string `json:"browser_download_url"`
+	Size int64  `json:"size"`
+}
+
 type Release struct {
-	TagName string `json:"tag_name"`
-	HTMLURL string `json:"html_url"`
+	TagName string  `json:"tag_name"`
+	HTMLURL string  `json:"html_url"`
+	Assets  []Asset `json:"assets"`
+}
+
+// PickInstaller returns the Windows installer asset from a release. It matches
+// the name produced by build/windows/installer/project.nsi OutFile, which ends
+// in "-installer.exe" (e.g. kub-connect-amd64-installer.exe). Reports false if
+// the release carries no such asset.
+func PickInstaller(rel Release) (Asset, bool) {
+	for _, a := range rel.Assets {
+		if strings.HasSuffix(strings.ToLower(a.Name), "-installer.exe") {
+			return a, true
+		}
+	}
+	return Asset{}, false
 }
 
 // CheckLatest fetches the latest GitHub release. Returns empty Release on error.
