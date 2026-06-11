@@ -52,7 +52,16 @@
         </div>
 
         <h2>Маршрутизация</h2>
-        <label><input type="checkbox" id="tg-toggle" /> Telegram → VPN</label>
+        <label class="row">
+          <span class="label">Режим</span>
+          <select id="routing-mode-select">
+            <option value="whitelist">Whitelist (только выбранное)</option>
+            <option value="full">Всё через VPN</option>
+          </select>
+        </label>
+        <div id="whitelist-only">
+          <label><input type="checkbox" id="tg-toggle" /> Telegram → VPN</label>
+        </div>
         <label><input type="checkbox" id="ru-toggle" /> RU напрямую</label>
         <label><input type="checkbox" id="kill-toggle" /> Kill switch (TUN)</label>
         <label><input type="checkbox" id="mux-toggle" /> Mux (для Telegram — на сервере клиент без flow)</label>

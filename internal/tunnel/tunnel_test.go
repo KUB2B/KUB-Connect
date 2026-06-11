@@ -38,9 +38,12 @@ type fakeTun struct{ started, stopped bool }
 func (f *fakeTun) Start(_, _ string) error { f.started = true; return nil }
 func (f *fakeTun) Stop() error             { f.stopped = true; return nil }
 
-type fakeRouter struct{ up, down bool }
+type fakeRouter struct {
+	up, down bool
+	upCfg    netcfg.Config // last config passed to Up
+}
 
-func (f *fakeRouter) Up(_ netcfg.Config) error   { f.up = true; return nil }
+func (f *fakeRouter) Up(c netcfg.Config) error   { f.up = true; f.upCfg = c; return nil }
 func (f *fakeRouter) Down(_ netcfg.Config) error { f.down = true; return nil }
 
 type fakeFirewall struct {
@@ -166,5 +169,28 @@ func TestStartRollsBackOnFirewallFailure(t *testing.T) {
 	if !r.down || !tnsvc.stopped || !c.inst.stopped {
 		t.Errorf("firewall failure must roll back routes/tun/core: down=%v tunStopped=%v coreStopped=%v",
 			r.down, tnsvc.stopped, c.inst.stopped)
+	}
+}
+
+func TestStartTUNFullSkipsKillSwitch(t *testing.T) {
+	// In full mode the whitelist-shaped kill switch must NOT be installed
+	// (Phase 2 will add a full-mode kill switch).
+	fw := &fakeFirewall{}
+	rt := &fakeRouter{}
+	tn := New(Config{
+		Mode: store.ModeTUN, Device: "tun0",
+		Full: true, KillSwitch: true,
+		ServerIPs: []string{"203.0.113.7"}, BlockIPv6: true,
+	}, Deps{
+		Core: &fakeCore{}, Tun: &fakeTun{}, Router: rt, Firewall: fw,
+	})
+	if err := tn.Start(); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if fw.on {
+		t.Error("kill switch must be skipped in full mode (Phase 1)")
+	}
+	if !rt.upCfg.FullTunnel {
+		t.Error("router should receive FullTunnel=true config")
 	}
 }

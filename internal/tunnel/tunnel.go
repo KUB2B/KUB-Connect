@@ -53,6 +53,9 @@ type Config struct {
 	TunPrefix  int
 	RouteCIDRs []string
 	KillSwitch bool
+	Full       bool
+	ServerIPs  []string
+	BlockIPv6  bool
 }
 
 // Tunnel is a configured, possibly-running capture session.
@@ -77,6 +80,9 @@ func (t *Tunnel) netcfgConfig() netcfg.Config {
 		TunIP:      t.cfg.TunIP,
 		Prefix:     t.cfg.TunPrefix,
 		RouteCIDRs: t.cfg.RouteCIDRs,
+		FullTunnel: t.cfg.Full,
+		ServerIPs:  t.cfg.ServerIPs,
+		BlockIPv6:  t.cfg.BlockIPv6,
 	}
 }
 
@@ -107,7 +113,7 @@ func (t *Tunnel) Start() error {
 			t.inst = nil
 			return fmt.Errorf("apply routes: %w", err)
 		}
-		if t.cfg.KillSwitch {
+		if t.cfg.KillSwitch && !t.cfg.Full {
 			if err := t.deps.Firewall.On(firewall.Config{Device: t.cfg.Device, CIDRs: t.cfg.RouteCIDRs}); err != nil {
 				_ = t.deps.Router.Down(t.netcfgConfig())
 				_ = t.deps.Tun.Stop()
@@ -138,7 +144,7 @@ func (t *Tunnel) Stop() error {
 	case store.ModeProxy:
 		record(t.deps.Proxy.Clear())
 	case store.ModeTUN:
-		if t.cfg.KillSwitch {
+		if t.cfg.KillSwitch && !t.cfg.Full {
 			record(t.deps.Firewall.Off())
 		}
 		record(t.deps.Router.Down(t.netcfgConfig()))

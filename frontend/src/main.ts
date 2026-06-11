@@ -18,6 +18,7 @@ import {
 import { EventsOn, BrowserOpenURL } from "../wailsjs/runtime";
 
 type Profile = {
+  full: boolean;
   telegram: boolean;
   forceRUDirect: boolean;
   customProxyDomains: string[];
@@ -151,6 +152,9 @@ function render(st: State) {
 
   (<HTMLInputElement>$("tg-toggle")).checked = st.profile.telegram;
   (<HTMLInputElement>$("ru-toggle")).checked = st.profile.forceRUDirect;
+  const routingSel = <HTMLSelectElement>$("routing-mode-select");
+  routingSel.value = st.profile.full ? "full" : "whitelist";
+  $("whitelist-only").classList.toggle("hidden", st.profile.full);
   (<HTMLSelectElement>$("mode-select")).value = st.settings.mode;
   const modeSel = <HTMLSelectElement>$("mode-select");
   const tunOpt = modeSel.querySelector<HTMLOptionElement>('option[value="tun"]');
@@ -260,6 +264,18 @@ function wire() {
   $("ru-toggle").addEventListener("change", () => {
     current.profile.forceRUDirect = (<HTMLInputElement>$("ru-toggle")).checked;
     UpdateProfile(current.profile);
+  });
+  $("routing-mode-select").addEventListener("change", () => {
+    const full = (<HTMLSelectElement>$("routing-mode-select")).value === "full";
+    const prev = current.profile.full;
+    current.profile.full = full;
+    $("whitelist-only").classList.toggle("hidden", full);
+    UpdateProfile(current.profile).catch((e) => {
+      current.profile.full = prev;
+      (<HTMLSelectElement>$("routing-mode-select")).value = prev ? "full" : "whitelist";
+      $("whitelist-only").classList.toggle("hidden", prev);
+      $("error-line").textContent = String(e);
+    });
   });
   $("mode-select").addEventListener("change", () => {
     const val = (<HTMLSelectElement>$("mode-select")).value;

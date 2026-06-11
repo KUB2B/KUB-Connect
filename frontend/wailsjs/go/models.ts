@@ -26,11 +26,11 @@ export namespace app {
 	    ok: boolean;
 	    latencyMs: number;
 	    error: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new PingResultDTO(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.ok = source["ok"];
@@ -39,6 +39,7 @@ export namespace app {
 	    }
 	}
 	export class ProfileDTO {
+	    full: boolean;
 	    telegram: boolean;
 	    forceRUDirect: boolean;
 	    customProxyDomains: string[];
@@ -50,6 +51,7 @@ export namespace app {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.full = source["full"];
 	        this.telegram = source["telegram"];
 	        this.forceRUDirect = source["forceRUDirect"];
 	        this.customProxyDomains = source["customProxyDomains"];

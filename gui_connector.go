@@ -47,6 +47,9 @@ func newConnector(c app.ConnConfig) (app.Connector, error) {
 		cfg.TunPrefix = c.TunPrefix
 		cfg.RouteCIDRs = c.RouteCIDRs
 		cfg.KillSwitch = c.KillSwitch
+		cfg.Full = c.FullTunnel
+		cfg.ServerIPs = c.ServerIPs
+		cfg.BlockIPv6 = c.BlockIPv6
 		tun.SetLogLevel(c.LogLevel)
 		deps.Tun = tunAdapter{}
 		deps.Router = netcfg.New()

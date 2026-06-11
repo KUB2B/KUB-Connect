@@ -117,7 +117,16 @@ func (a *App) startup(ctx context.Context) {
 	// A pending-connect intent (set before an elevated restart) takes priority
 	// over the normal AutoConnect setting; consume it once, else auto-connect.
 	if !a.svc.ResumePendingConnect() {
-		a.svc.MaybeAutoConnect()
+		if a.svc.WantsElevatedAutoConnect() {
+			// TUN auto-connect needs admin: relaunch elevated and connect once
+			// there (Connect would otherwise fail the privilege check silently).
+			// A declined UAC just leaves this instance unprivileged/disconnected.
+			if err := a.RelaunchElevated(true); err != nil {
+				log.Printf("autoconnect elevate: %v", err)
+			}
+		} else {
+			a.svc.MaybeAutoConnect()
+		}
 	}
 	// Fire-and-forget: refreshing the OS login entry may spawn launchctl on
 	// macOS; keep it off the startup path so the window appears promptly.

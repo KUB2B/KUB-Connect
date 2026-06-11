@@ -68,3 +68,14 @@ func TestUpdateSettingsRejectsBadMode(t *testing.T) {
 		t.Error("expected error for invalid mode")
 	}
 }
+
+func TestUpdateProfileFullRoundTrips(t *testing.T) {
+	svc, _, _, _ := testDeps(t)
+	if err := svc.UpdateProfile(ProfileDTO{Full: true, ForceRUDirect: true}); err != nil {
+		t.Fatalf("UpdateProfile: %v", err)
+	}
+	st := svc.GetState()
+	if !st.Profile.Full {
+		t.Error("StateDTO.Profile.Full should round-trip true")
+	}
+}

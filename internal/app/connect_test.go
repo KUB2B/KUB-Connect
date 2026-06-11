@@ -21,6 +21,38 @@ func connectReadyService(t *testing.T) (*Service, *fakeEmitter, *fakeConnector, 
 	return svc, em, fc, captured
 }
 
+// fullSampleLink uses a literal IP so resolveServerIPv4 is deterministic without DNS.
+const fullSampleLink = "vless://b831381d-6324-4d53-ad4f-8cda48b30811@203.0.113.7:443?security=reality&pbk=x&sni=example.com&type=tcp&fp=chrome#full"
+
+func TestConnectTUNFullPopulatesConfig(t *testing.T) {
+	svc, _, fc, captured := testDeps(t) // testDeps is elevated
+	mustAdd(t, svc, fullSampleLink)
+	if err := svc.UpdateProfile(ProfileDTO{Full: true}); err != nil {
+		t.Fatalf("UpdateProfile: %v", err)
+	}
+	if err := svc.UpdateSettings(SettingsDTO{Mode: "tun"}); err != nil {
+		t.Fatalf("UpdateSettings: %v", err)
+	}
+	if err := svc.Connect(); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	if !fc.started {
+		t.Fatal("connector should have started")
+	}
+	if !captured.FullTunnel {
+		t.Error("ConnConfig.FullTunnel should be true in full TUN mode")
+	}
+	if !captured.BlockIPv6 {
+		t.Error("ConnConfig.BlockIPv6 should be true in full TUN mode")
+	}
+	if len(captured.ServerIPs) == 0 {
+		t.Error("ConnConfig.ServerIPs should be populated from the server host")
+	}
+	if len(captured.RouteCIDRs) != 0 {
+		t.Error("full mode should clear selective RouteCIDRs")
+	}
+}
+
 func TestConnectProxyHappyPath(t *testing.T) {
 	svc, em, fc, captured := connectReadyService(t)
 	if err := svc.Connect(); err != nil {

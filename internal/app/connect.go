@@ -127,6 +127,15 @@ func (s *Service) Connect() error {
 		cc.TunIP = tunIP
 		cc.TunPrefix = tunPrefix
 		cc.RouteCIDRs = tunRouteCIDRs(s.state.Profile)
+		if s.state.Profile.Full {
+			cc.FullTunnel = true
+			cc.BlockIPv6 = true
+			cc.ServerIPs = resolveServerIPv4(srv.Host)
+			if len(cc.ServerIPs) == 0 {
+				s.bus.Append("warning: could not resolve server IP for bypass; full-tunnel may loop")
+			}
+			cc.RouteCIDRs = nil // split-default replaces selective routes
+		}
 		s.bus.Append("note: TUN mode routes whitelisted IPs only; geosite domains are not host-routed")
 		if s.state.Settings.KillSwitch {
 			if s.killSwitchSupported() {
