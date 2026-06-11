@@ -24,3 +24,18 @@ func parseLinuxDefaultRoute(s string) (gw, dev string, err error) {
 	}
 	return gw, dev, nil
 }
+
+// parseWinDefaultRoute parses "<gw> <interface alias>" emitted by the
+// Get-NetRoute PowerShell command. The interface alias may contain spaces
+// (e.g. "Local Area Connection"), so everything after the first token is the
+// alias.
+func parseWinDefaultRoute(s string) (gw, dev string, err error) {
+	line := strings.TrimSpace(strings.SplitN(s, "\n", 2)[0])
+	fields := strings.Fields(line)
+	if len(fields) < 2 {
+		return "", "", fmt.Errorf("malformed default route output %q", line)
+	}
+	gw = fields[0]
+	dev = strings.Join(fields[1:], " ")
+	return gw, dev, nil
+}
