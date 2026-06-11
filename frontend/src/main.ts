@@ -66,6 +66,11 @@ let current: State;
 // and index shifts when a server is removed.
 const pingResults: Record<string, string> = {};
 
+// Live ping-result <span> per server key, rebuilt on every render so an
+// in-flight Ping resolves into the currently-mounted element instead of a
+// detached one when a `state` event re-renders the list mid-request.
+let pingEls: Record<string, HTMLElement> = {};
+
 function setTab(name: string) {
   document.querySelectorAll<HTMLElement>(".tab").forEach((b) => {
     b.classList.toggle("active", b.dataset.tab === name);
@@ -105,10 +110,14 @@ function render(st: State) {
   // Server list on Настройки.
   const list = $("server-list");
   list.innerHTML = "";
+  pingEls = {};
   st.servers.forEach((s, i) => {
     const li = document.createElement("li");
     li.className = i === st.activeServer ? "active" : "";
-    li.innerHTML = `<span>${s.name} (${s.host}:${s.port})</span>`;
+    // textContent, not innerHTML: server name/host come from a user-pasted
+    // vless:// link and may contain markup or `&`/`<` characters.
+    const label = document.createElement("span");
+    label.textContent = `${s.name} (${s.host}:${s.port})`;
     const pick = document.createElement("button");
     pick.textContent = "Выбрать";
     pick.onclick = () => SetActiveServer(i);
@@ -121,20 +130,22 @@ function render(st: State) {
     const result = document.createElement("span");
     result.className = "ping-result";
     result.textContent = pingResults[key] ?? "";
+    pingEls[key] = result;
     ping.onclick = () => {
+      pingResults[key] = "…";
       result.textContent = "…";
+      const apply = (text: string) => {
+        pingResults[key] = text;
+        // Resolve into the currently-mounted span, which may differ from
+        // `result` if a re-render happened while the Ping was in flight.
+        const el = pingEls[key];
+        if (el) el.textContent = text;
+      };
       Ping(i)
-        .then((r) => {
-          const text = r.ok ? `${r.latencyMs} мс` : (r.error || "ошибка");
-          pingResults[key] = text;
-          result.textContent = text;
-        })
-        .catch(() => {
-          pingResults[key] = "ошибка";
-          result.textContent = "ошибка";
-        });
+        .then((r) => apply(r.ok ? `${r.latencyMs} мс` : r.error || "ошибка"))
+        .catch(() => apply("ошибка"));
     };
-    li.append(pick, del, ping, result);
+    li.append(label, pick, del, ping, result);
     list.append(li);
   });
 
@@ -169,9 +180,18 @@ function refresh() {
   });
 }
 
+// Cap the in-memory log so a long-running session doesn't grow the DOM text
+// node without bound.
+const MAX_LOG_LINES = 2000;
+const logLines: string[] = [];
+
 function appendLog(line: string) {
+  logLines.push(line);
+  if (logLines.length > MAX_LOG_LINES) {
+    logLines.splice(0, logLines.length - MAX_LOG_LINES);
+  }
   const view = $("log-view");
-  view.textContent += line + "\n";
+  view.textContent = logLines.join("\n") + "\n";
   view.scrollTop = view.scrollHeight;
 }
 
@@ -219,12 +239,18 @@ function wire() {
 
   $("add-server-btn").addEventListener("click", () => {
     const input = <HTMLInputElement>$("link-input");
+    const btn = <HTMLButtonElement>$("add-server-btn");
+    if (btn.disabled) return;
+    btn.disabled = true;
     AddServer(input.value)
       .then(() => {
         input.value = "";
         $("link-error").textContent = "";
       })
-      .catch((e) => ($("link-error").textContent = String(e)));
+      .catch((e) => ($("link-error").textContent = String(e)))
+      .finally(() => {
+        btn.disabled = false;
+      });
   });
 
   $("tg-toggle").addEventListener("change", () => {
@@ -278,6 +304,7 @@ function wire() {
     pushSettings();
   });
   $("clear-logs-btn").addEventListener("click", () => {
+    logLines.length = 0;
     $("log-view").textContent = "";
   });
 
