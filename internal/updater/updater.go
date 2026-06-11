@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"golang.org/x/mod/semver"
 )
 
 const apiURL = "https://api.github.com/repos/KUB2B/KUB-Connect/releases/latest"
@@ -34,13 +36,27 @@ func CheckLatest() (Release, error) {
 	return r, nil
 }
 
-// IsNewer reports whether latest tag is a different version than current.
-// Returns false for dev builds so CI/dev users don't see spurious banners.
+// IsNewer reports whether latestTag is a strictly higher version than current,
+// compared by semantic versioning order. Returns false for dev builds so CI/dev
+// users don't see spurious banners, and false when current is ahead of latest.
+// Falls back to plain inequality if either value isn't valid semver.
 func IsNewer(current, latestTag string) bool {
 	if current == "dev" || current == "" || latestTag == "" {
 		return false
 	}
-	cur := strings.TrimPrefix(current, "v")
-	lat := strings.TrimPrefix(latestTag, "v")
-	return lat != cur
+	cur := withV(current)
+	lat := withV(latestTag)
+	if !semver.IsValid(cur) || !semver.IsValid(lat) {
+		// Unparseable tag — be conservative and only flag on difference.
+		return strings.TrimPrefix(latestTag, "v") != strings.TrimPrefix(current, "v")
+	}
+	return semver.Compare(lat, cur) > 0
+}
+
+// withV ensures a leading "v" so the value is canonical-form semver.
+func withV(s string) string {
+	if strings.HasPrefix(s, "v") {
+		return s
+	}
+	return "v" + s
 }
