@@ -65,3 +65,60 @@ func hasProxyDomain(rules []Rule, domain string) bool {
 	}
 	return false
 }
+
+func TestRulesFullTunnel(t *testing.T) {
+	p := Profile{Full: true, Telegram: true, ForceRUDirect: true,
+		CustomProxyDomains: []string{"example.com"}}
+	rules := p.Rules()
+
+	// Last rule is the catch-all and must now go to proxy.
+	last := rules[len(rules)-1]
+	if last.Outbound != OutboundProxy || last.Network != "tcp,udp" {
+		t.Fatalf("full catch-all = %+v, want proxy tcp,udp", last)
+	}
+
+	// Telegram and custom-proxy rules are subsumed and must NOT appear.
+	for _, r := range rules {
+		for _, d := range r.Domains {
+			if d == "geosite:telegram" || d == "example.com" {
+				t.Errorf("full mode should omit whitelist proxy rule: %+v", r)
+			}
+		}
+	}
+
+	// RU-Direct and private direct exceptions are kept, before the catch-all.
+	var sawRU, sawPrivate, sawV6Block bool
+	for _, r := range rules {
+		if r.Outbound == OutboundDirect {
+			for _, ip := range r.IPs {
+				if ip == "geoip:ru" {
+					sawRU = true
+				}
+				if ip == "geoip:private" {
+					sawPrivate = true
+				}
+			}
+		}
+		if r.Outbound == OutboundBlock {
+			for _, ip := range r.IPs {
+				if ip == "::/0" {
+					sawV6Block = true
+				}
+			}
+		}
+	}
+	if !sawRU || !sawPrivate || !sawV6Block {
+		t.Errorf("full mode missing exception/block rules: ru=%v private=%v v6block=%v",
+			sawRU, sawPrivate, sawV6Block)
+	}
+}
+
+func TestRulesWhitelistUnchanged(t *testing.T) {
+	// Regression guard: default (whitelist) catch-all stays direct.
+	p := Default()
+	rules := p.Rules()
+	last := rules[len(rules)-1]
+	if last.Outbound != OutboundDirect || last.Network != "tcp,udp" {
+		t.Fatalf("whitelist catch-all = %+v, want direct tcp,udp", last)
+	}
+}

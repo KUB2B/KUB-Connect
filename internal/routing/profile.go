@@ -37,8 +37,10 @@ var TelegramCIDRs = []string{
 	"2a0a:f280::/32",
 }
 
-// Profile is the user's whitelist routing choices.
+// Profile is the user's routing choices. Full selects the full-tunnel model
+// (everything through the VPN); otherwise the whitelist model applies.
 type Profile struct {
+	Full               bool
 	Telegram           bool
 	ForceRUDirect      bool
 	CustomProxyDomains []string
@@ -57,6 +59,10 @@ type Rule struct {
 // forced-direct RU first, then private, then proxy matches, then a
 // catch-all direct (whitelist: anything unmatched goes direct).
 func (p Profile) Rules() []Rule {
+	if p.Full {
+		return p.fullRules()
+	}
+
 	var rules []Rule
 
 	if p.ForceRUDirect {
@@ -81,6 +87,23 @@ func (p Profile) Rules() []Rule {
 	}
 
 	rules = append(rules, Rule{Outbound: OutboundDirect, Network: "tcp,udp"})
+	return rules
+}
+
+// fullRules is the full-tunnel rule set: keep LAN (and optionally RU) direct,
+// blackhole all IPv6 (it is captured into the TUN but the server path is IPv4
+// only — see netcfg BlockIPv6), and send everything else to the proxy.
+func (p Profile) fullRules() []Rule {
+	var rules []Rule
+	if p.ForceRUDirect {
+		rules = append(rules,
+			Rule{Outbound: OutboundDirect, Domains: []string{"geosite:category-ru"}},
+			Rule{Outbound: OutboundDirect, IPs: []string{"geoip:ru"}},
+		)
+	}
+	rules = append(rules, Rule{Outbound: OutboundDirect, IPs: []string{"geoip:private"}})
+	rules = append(rules, Rule{Outbound: OutboundBlock, IPs: []string{"::/0"}})
+	rules = append(rules, Rule{Outbound: OutboundProxy, Network: "tcp,udp"})
 	return rules
 }
 
