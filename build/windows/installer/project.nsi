@@ -77,6 +77,19 @@ ShowInstDetails show # This will always show the installation details.
 
 Function .onInit
    !insertmacro wails.checkArchitecture
+
+   ; Detect existing installation and offer upgrade
+   SetRegView 64
+   ReadRegStr $0 HKLM "${UNINST_KEY}" "DisplayVersion"
+   ${If} $0 != ""
+      MessageBox MB_YESNO|MB_ICONQUESTION \
+         "KUB Connect $0 уже установлен.$\nОбновить до ${INFO_PRODUCTVERSION}?" \
+         IDYES do_upgrade IDNO do_abort
+      do_abort:
+         Abort
+      do_upgrade:
+         ExecWait 'taskkill /F /IM "${PRODUCT_EXECUTABLE}" /T'
+   ${EndIf}
 FunctionEnd
 
 Section
