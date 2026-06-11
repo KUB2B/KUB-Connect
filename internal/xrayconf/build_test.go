@@ -220,3 +220,19 @@ func TestBuildOmitsErrorLogWhenUnset(t *testing.T) {
 		t.Errorf("expected no log.error key when LogFile unset; got %s", out)
 	}
 }
+
+func TestBuildFullTunnelRouting(t *testing.T) {
+	srv := sampleServer()
+	p := routing.Profile{Full: true, ForceRUDirect: true}
+	out, err := Build(srv, p, Options{SocksPort: 10808})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	s := string(out)
+	if !strings.Contains(s, `"outboundTag":"proxy"`) {
+		t.Errorf("full-mode config should route the catch-all to proxy; got %s", s)
+	}
+	if !strings.Contains(s, `"::/0"`) {
+		t.Error("full-mode config should contain the IPv6 block rule")
+	}
+}
