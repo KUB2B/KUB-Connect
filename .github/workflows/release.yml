@@ -33,7 +33,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libgtk-3-dev libwebkit2gtk-4.1-dev \
-            gcc-mingw-w64-x86-64
+            gcc-mingw-w64-x86-64 nsis
 
       - name: Cache wails CLI
         id: cache-wails
@@ -60,15 +60,21 @@ jobs:
             -ldflags "-X main.version=${GITHUB_REF_NAME}"
           mv build/bin/kub-connect "kub-connect-${GITHUB_REF_NAME}-linux-amd64"
 
-      - name: Build Windows
+      - name: Build Windows installer
         env:
           CC: x86_64-w64-mingw32-gcc
           CXX: x86_64-w64-mingw32-g++
           CGO_ENABLED: "1"
         run: |
+          # wails -nsis silently skips the installer (exit 0) when makensis
+          # is absent, so assert it up front and verify the output exists.
+          command -v makensis >/dev/null || { echo "::error::makensis missing (apt install nsis)"; exit 1; }
           wails build -platform windows/amd64 -tags wails \
-            -ldflags "-X main.version=${GITHUB_REF_NAME}"
-          mv "build/bin/kub-connect.exe" "kub-connect-${GITHUB_REF_NAME}-windows-amd64.exe"
+            -ldflags "-X main.version=${GITHUB_REF_NAME}" -nsis
+          test -f build/bin/kub-connect-amd64-installer.exe \
+            || { echo "::error::NSIS installer not produced"; exit 1; }
+          mv build/bin/kub-connect-amd64-installer.exe \
+            "kub-connect-${GITHUB_REF_NAME}-windows-amd64-installer.exe"
 
       - name: Extract release notes from CHANGELOG.md
         run: |
@@ -80,7 +86,7 @@ jobs:
         with:
           files: |
             kub-connect-*-linux-amd64
-            kub-connect-*-windows-amd64.exe
+            kub-connect-*-windows-amd64-installer.exe
           body_path: release-notes.md
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
