@@ -82,6 +82,18 @@ function setTab(name: string) {
   });
 }
 
+function connectionHint(mode: string): string {
+  return mode === "tun"
+    ? "Перехватывает трафик сам, работает со всеми приложениями."
+    : "Трафик идёт через системный SOCKS. Telegram его игнорирует — для него выберите TUN.";
+}
+
+function routingHint(full: boolean): string {
+  return full
+    ? "Весь трафик через туннель. Российские сайты можно оставить напрямую."
+    : "В VPN идёт только Telegram. Остальное — напрямую.";
+}
+
 function render(st: State) {
   // Power button: color from conn state.
   const btn = $("power-btn");
@@ -156,6 +168,9 @@ function render(st: State) {
   const routingSel = <HTMLSelectElement>$("routing-mode-select");
   routingSel.value = st.profile.full ? "full" : "whitelist";
   $("whitelist-only").classList.toggle("hidden", st.profile.full);
+  $("full-only").classList.toggle("hidden", !st.profile.full);
+  $("routing-hint").textContent = routingHint(st.profile.full);
+
   (<HTMLSelectElement>$("mode-select")).value = st.settings.mode;
   const modeSel = <HTMLSelectElement>$("mode-select");
   const tunOpt = modeSel.querySelector<HTMLOptionElement>('option[value="tun"]');
@@ -166,11 +181,18 @@ function render(st: State) {
   if (!st.caps.tunSupported && modeSel.value === "tun") {
     modeSel.value = "proxy";
   }
+  $("connection-hint").textContent = connectionHint(modeSel.value);
   $("app-version").textContent = st.caps.version;
+
   const killToggle = <HTMLInputElement>$("kill-toggle");
   killToggle.checked = st.settings.killSwitch;
-  killToggle.disabled = !st.caps.killSwitchSupported;
-  killToggle.title = st.caps.killSwitchSupported ? "" : "Kill switch не поддерживается на этой ОС";
+  // Kill switch only has an effect in TUN + whitelist on a supporting OS
+  // (tunnel.go gates on KillSwitch && !Full; firewall is Linux-only). Hide it
+  // everywhere else so no inert control is shown.
+  const killVisible =
+    modeSel.value === "tun" && st.caps.killSwitchSupported && !st.profile.full;
+  $("kill-row").classList.toggle("hidden", !killVisible);
+
   (<HTMLInputElement>$("mux-toggle")).checked = st.settings.mux;
   (<HTMLInputElement>$("autostart-toggle")).checked = st.settings.autoStart;
   (<HTMLInputElement>$("autoconnect-toggle")).checked = st.settings.autoConnect;
