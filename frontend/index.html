@@ -50,27 +50,36 @@
         <p id="link-error" class="error"></p>
         <ul id="server-list"></ul>
 
-        <h2>Режим</h2>
+        <h2>Подключение</h2>
         <div class="row">
           <select id="mode-select">
-            <option value="proxy">Proxy (системный SOCKS)</option>
-            <option value="tun">TUN (нужны права администратора)</option>
+            <option value="proxy">Proxy — без прав администратора</option>
+            <option value="tun">TUN — нужны права администратора</option>
           </select>
         </div>
+        <p id="connection-hint" class="hint"></p>
 
-        <h2>Маршрутизация</h2>
+        <h2>Что через VPN</h2>
         <label class="row">
           <span class="label">Режим</span>
           <select id="routing-mode-select">
-            <option value="whitelist">Whitelist (только выбранное)</option>
+            <option value="whitelist">Только выбранное</option>
             <option value="full">Всё через VPN</option>
           </select>
         </label>
+        <p id="routing-hint" class="hint"></p>
         <div id="whitelist-only">
           <label><input type="checkbox" id="tg-toggle" /> Telegram → VPN</label>
+          <span class="hint">Заворачивать Telegram в туннель.</span>
         </div>
-        <label><input type="checkbox" id="ru-toggle" /> RU напрямую</label>
-        <label><input type="checkbox" id="kill-toggle" /> Kill switch (TUN)</label>
+        <div id="full-only">
+          <label><input type="checkbox" id="ru-toggle" /> RU напрямую</label>
+          <span class="hint">Российские сайты (geoip:ru) — мимо VPN. Быстрее и без блокировок зарубежных сервисов.</span>
+        </div>
+        <div id="kill-row">
+          <label><input type="checkbox" id="kill-toggle" /> Kill switch</label>
+          <span class="hint">Если VPN отвалится — блокировать трафик выбранных адресов, чтобы он не утёк напрямую.</span>
+        </div>
         <label><input type="checkbox" id="mux-toggle" /> Mux (для Telegram — на сервере клиент без flow)</label>
 
         <h2>Запуск</h2>
