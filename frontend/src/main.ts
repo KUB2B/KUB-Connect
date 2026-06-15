@@ -13,6 +13,7 @@ import {
   QuitApp,
   RelaunchElevated,
   CheckUpdate,
+  DownloadAndInstall,
   Ping,
 } from "../wailsjs/go/main/App";
 import { EventsOn, BrowserOpenURL } from "../wailsjs/runtime";
@@ -380,6 +381,11 @@ function wire() {
     render(st);
   });
   EventsOn("log", (line: string) => appendLog(line));
+  EventsOn("update-progress", (p: { done: number; total: number }) => {
+    const pct = p.total > 0 ? Math.round((p.done / p.total) * 100) : 0;
+    $("update-percent").textContent = pct + "%";
+    (<HTMLElement>$("update-bar-fill")).style.width = pct + "%";
+  });
 }
 
 function checkUpdate() {
@@ -390,6 +396,18 @@ function checkUpdate() {
     const link = <HTMLAnchorElement>$("update-link");
     link.href = "#";
     link.onclick = (e) => { e.preventDefault(); BrowserOpenURL(info.url); };
+
+    $("update-btn").onclick = () => {
+      $("update-text").classList.add("hidden");
+      $("update-progress-wrap").classList.remove("hidden");
+      DownloadAndInstall().catch((err) => {
+        // UAC declined / network / no asset — restore the banner with a note.
+        $("update-progress-wrap").classList.add("hidden");
+        $("update-text").classList.remove("hidden");
+        $("error-line").textContent = "Обновление не удалось: " + String(err);
+      });
+    };
+
     banner.classList.remove("hidden");
     $("update-dismiss").onclick = () => banner.classList.add("hidden");
   }).catch(() => {/* network error — silently ignore */});
