@@ -263,7 +263,10 @@ func (a *App) DownloadAndInstall() error {
 		return fmt.Errorf("установщик не найден в релизе %s", rel.TagName)
 	}
 
-	dst := filepath.Join(os.TempDir(), fmt.Sprintf("kub-connect-%s-installer.exe", rel.TagName))
+	// rel.TagName is external (GitHub API JSON); filepath.Base strips any path
+	// separators so a hostile tag can't escape TempDir.
+	safeTag := filepath.Base(rel.TagName)
+	dst := filepath.Join(os.TempDir(), fmt.Sprintf("kub-connect-%s-installer.exe", safeTag))
 	err = updater.Download(a.ctx, asset, dst, func(done, total int64) {
 		wruntime.EventsEmit(a.ctx, "update-progress", map[string]int64{"done": done, "total": total})
 	})
