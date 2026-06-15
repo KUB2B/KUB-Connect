@@ -133,3 +133,11 @@ label { display: block; margin: 0.4rem 0; }
   background: var(--accent);
   transition: width 0.2s ease;
 }
+.hint {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin: 0.15rem 0 0.5rem 0.1rem;
+}
+#full-only.hidden { display: none; }
+#kill-row.hidden { display: none; }
