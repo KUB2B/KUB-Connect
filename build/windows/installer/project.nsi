@@ -123,5 +123,15 @@ Section "uninstall"
     !insertmacro wails.unassociateFiles
     !insertmacro wails.unassociateCustomProtocols
 
+    # Offer to remove user data (config, geo cache, wintun driver).
+    # Kept by default so a reinstall preserves servers/settings.
+    MessageBox MB_YESNO|MB_ICONQUESTION \
+        "Удалить настройки и данные KUB Connect?$\n(сервера, настройки, geo-базы)" \
+        IDYES uninst_purge IDNO uninst_keep
+    uninst_purge:
+        RMDir /r "$AppData\${INFO_PROJECTNAME}"      # %AppData%\kub-connect — state.json
+        RMDir /r "$LocalAppData\${INFO_PROJECTNAME}" # %LocalAppData%\kub-connect — geo + wintun.dll
+    uninst_keep:
+
     !insertmacro wails.deleteUninstaller
 SectionEnd
