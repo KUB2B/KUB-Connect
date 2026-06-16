@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"sync/atomic"
 
+	"github.com/wailsapp/wails/v2/pkg/options"
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/zki/vless-client/internal/app"
@@ -151,6 +152,15 @@ func (a *App) startup(ctx context.Context) {
 		onDisconnect: func() { go func() { _ = a.svc.Disconnect() }() },
 		onQuit:       func() { a.quit() },
 	})
+}
+
+// onSecondInstanceLaunch fires in the first (already-running) instance when the
+// user launches the app again. Bring the existing window to the foreground —
+// the second process detects the lock and exits on its own — so a relaunch
+// surfaces the running app instead of starting a duplicate.
+func (a *App) onSecondInstanceLaunch(options.SecondInstanceData) {
+	wruntime.WindowShow(a.ctx)
+	wruntime.WindowUnminimise(a.ctx)
 }
 
 // shutdown runs when the app is terminating (window closed or quit). It tears

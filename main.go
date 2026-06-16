@@ -32,6 +32,13 @@ func main() {
 		OnShutdown:    a.shutdown,
 		OnBeforeClose: a.beforeClose,
 		Bind:          []any{a},
+		// Guard against multiple instances: a second launch hands off to the
+		// already-running process (OnSecondInstanceLaunch) and then exits, so
+		// relaunching focuses the existing window instead of spawning a clone.
+		SingleInstanceLock: &options.SingleInstanceLock{
+			UniqueId:               "pro.qb2b.kub-connect",
+			OnSecondInstanceLaunch: a.onSecondInstanceLaunch,
+		},
 	})
 	if err != nil {
 		panic(err)

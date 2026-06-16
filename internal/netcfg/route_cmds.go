@@ -61,7 +61,7 @@ func linuxFullDownCommands(c Config) [][]string {
 }
 
 // winFullUpCommands builds the netsh commands to enter full-tunnel mode.
-// gw/dev are the physical default gateway IP and its interface alias.
+// gw/dev are the physical default gateway IP and its interface index.
 func winFullUpCommands(c Config, gw, dev string) [][]string {
 	cmds := [][]string{
 		{"netsh", "interface", "ipv4", "set", "address", "name=" + c.Device, "static", c.TunIP, prefixToMaskV4(c.Prefix)},
@@ -84,7 +84,7 @@ func winFullUpCommands(c Config, gw, dev string) [][]string {
 }
 
 // winFullDownCommands reverses winFullUpCommands. dev is the physical interface
-// alias (needed to delete the server-bypass routes). The TUN adapter's address
+// index (needed to delete the server-bypass routes). The TUN adapter's address
 // disappears when tun2socks destroys the adapter, so only routes are removed.
 func winFullDownCommands(c Config, dev string) [][]string {
 	cmds := [][]string{

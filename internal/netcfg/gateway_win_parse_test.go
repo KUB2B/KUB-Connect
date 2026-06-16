@@ -7,8 +7,8 @@ func TestParseWinDefaultRoute(t *testing.T) {
 		in, gw, dev string
 		ok          bool
 	}{
-		{"192.168.1.1 Ethernet\n", "192.168.1.1", "Ethernet", true},
-		{"  10.0.0.1   Wi-Fi  ", "10.0.0.1", "Wi-Fi", true},
+		{"192.168.1.1 12\n", "192.168.1.1", "12", true},
+		{"  10.0.0.1   7  ", "10.0.0.1", "7", true},
 		{"", "", "", false},
 		{"0.0.0.0", "", "", false}, // missing interface token
 	}
