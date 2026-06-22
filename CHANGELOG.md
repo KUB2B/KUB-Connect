@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.2.0 — 2026-06-22
+
+### Новое
+- Отдельная сборка для **Windows 7 SP1 / Server 2008 R2** —
+  `kub-connect-vX.Y.Z-windows7-amd64-installer.exe`. Собирается патченным
+  toolchain XTLS go-win7 (официальный Go 1.21+ на Win7 падает при старте).
+  Обычный установщик по-прежнему требует Windows 10+. Требования к Win7:
+  обновления KB2533623, KB4474419 и WebView2 Runtime (см. docs/INSTALL.md).
+
 ## v1.1.3 — 2026-06-16
 
 ### Исправления

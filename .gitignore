@@ -21,3 +21,6 @@ frontend/dist/
 
 # Superpowers brainstorm sessions
 .superpowers/
+
+# XTLS go-win7 toolchain (fetched by scripts/fetch-go-win7.sh)
+.go-win7/

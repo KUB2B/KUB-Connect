@@ -31,7 +31,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libgtk-3-dev libwebkit2gtk-4.1-dev \
-            gcc-mingw-w64-x86-64
+            gcc-mingw-w64-x86-64 unzip
 
       - name: Cache wails CLI
         id: cache-wails
@@ -64,6 +64,23 @@ jobs:
           wails build -platform windows/amd64 -tags wails \
             -ldflags "-X main.version=${GITHUB_REF_NAME}"
           mv "build/bin/kub-connect.exe" "kub-connect-${GITHUB_REF_NAME}-windows-amd64.exe"
+
+      - name: Build Windows 7
+        # Same build, but with the XTLS go-win7 toolchain so the binary runs on
+        # Windows 7 SP1 / Server 2008 R2 (official Go 1.21+ crashes there).
+        # Only GOROOT changes; app code/deps are identical.
+        env:
+          CC: x86_64-w64-mingw32-gcc
+          CXX: x86_64-w64-mingw32-g++
+          CGO_ENABLED: "1"
+        run: |
+          scripts/fetch-go-win7.sh
+          export GOROOT="$PWD/.go-win7"
+          export PATH="$GOROOT/bin:$PATH"
+          go version
+          wails build -platform windows/amd64 -tags wails \
+            -ldflags "-X main.version=${GITHUB_REF_NAME}"
+          mv "build/bin/kub-connect.exe" "kub-connect-${GITHUB_REF_NAME}-windows7-amd64.exe"
 
       - name: Extract release notes from CHANGELOG.md
         run: |
@@ -108,7 +125,7 @@ jobs:
           fi
           echo "Release id: ${RELEASE_ID}"
 
-          for FILE in kub-connect-*-linux-amd64 kub-connect-*-windows-amd64.exe; do
+          for FILE in kub-connect-*-linux-amd64 kub-connect-*-windows-amd64.exe kub-connect-*-windows7-amd64.exe; do
             [ -e "$FILE" ] || { echo "::error::asset missing: $FILE"; exit 1; }
             echo "Uploading ${FILE} ..."
             ACODE=$(curl -sS -o /dev/null -w "%{http_code}" -X POST \

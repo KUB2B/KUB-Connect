@@ -38,6 +38,10 @@ gui: ## Build the Wails GUI for the host OS (Linux)
 windows: ## Cross-build the Windows NSIS installer (needs mingw + nsis)
 	VER=$(VER) scripts/build-windows.sh
 
+.PHONY: windows7
+windows7: ## Cross-build the Windows 7 installer (XTLS go-win7 toolchain)
+	VER=$(VER) WIN7=1 scripts/build-windows.sh
+
 .PHONY: macos
 macos: ## Build, sign, notarize the macOS .dmg (run on a Mac, needs APPLE_* env)
 	VER=$(VER) scripts/build-macos.sh
