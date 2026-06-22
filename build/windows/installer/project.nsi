@@ -129,8 +129,15 @@ Section "uninstall"
         "Удалить настройки и данные KUB Connect?$\n(сервера, настройки, geo-базы)" \
         IDYES uninst_purge IDNO uninst_keep
     uninst_purge:
+        # The app writes config under the per-user profile (Go os.UserConfigDir →
+        # %AppData%\kub-connect). The uninstaller runs elevated, where the wails
+        # macro sets shell context to "all" so $AppData would resolve to
+        # C:\ProgramData and miss the user's data entirely. Force current-user
+        # context here so $AppData/$LocalAppData point at the real locations.
+        SetShellVarContext current
         RMDir /r "$AppData\${INFO_PROJECTNAME}"      # %AppData%\kub-connect — state.json
         RMDir /r "$LocalAppData\${INFO_PROJECTNAME}" # %LocalAppData%\kub-connect — geo + wintun.dll
+        !insertmacro wails.setShellContext           # restore context for the rest of the section
     uninst_keep:
 
     !insertmacro wails.deleteUninstaller
