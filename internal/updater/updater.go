@@ -27,11 +27,24 @@ type Release struct {
 	Assets  []Asset `json:"assets"`
 }
 
-// PickInstaller returns the Windows installer asset from a release. It matches
-// the name produced by build/windows/installer/project.nsi OutFile, which ends
-// in "-installer.exe" (e.g. kub-connect-amd64-installer.exe). Reports false if
-// the release carries no such asset.
-func PickInstaller(rel Release) (Asset, bool) {
+// PickInstaller returns the Windows installer asset matching the running OS.
+// Since v1.2.0 a release carries two installers — "-windows-amd64-installer.exe"
+// (mainline, Win10+) and "-windows7-amd64-installer.exe" (Win7/8). The mainline
+// binary crashes on Win7, so legacy hosts MUST get the windows7 build; selection
+// can't rely on asset order (GitHub doesn't guarantee it). When the exact match
+// is absent (older single-installer releases), falls back to any "-installer.exe".
+// Reports false if the release carries no installer at all.
+func PickInstaller(rel Release, legacy bool) (Asset, bool) {
+	want := "-windows-amd64-installer.exe"
+	if legacy {
+		want = "-windows7-amd64-installer.exe"
+	}
+	for _, a := range rel.Assets {
+		if strings.HasSuffix(strings.ToLower(a.Name), want) {
+			return a, true
+		}
+	}
+	// Fallback for releases that predate the per-OS split.
 	for _, a := range rel.Assets {
 		if strings.HasSuffix(strings.ToLower(a.Name), "-installer.exe") {
 			return a, true

@@ -45,19 +45,36 @@ func TestIsNewer(t *testing.T) {
 }
 
 func TestPickInstaller(t *testing.T) {
-	rel := Release{Assets: []Asset{
-		{Name: "KUB-Connect.dmg", URL: "https://x/dmg", Size: 10},
-		{Name: "kub-connect-amd64-installer.exe", URL: "https://x/exe", Size: 20},
+	// A v1.2.0+ release carries both installers. The win7 asset is listed FIRST
+	// here on purpose: GitHub asset order is not contractual, so selection must
+	// be driven by the running OS, not by array position.
+	dual := Release{Assets: []Asset{
+		{Name: "kub-connect-v1.2.0-linux-amd64", URL: "https://x/linux", Size: 5},
+		{Name: "kub-connect-v1.2.0-windows7-amd64-installer.exe", URL: "https://x/win7", Size: 20},
+		{Name: "kub-connect-v1.2.0-windows-amd64-installer.exe", URL: "https://x/win10", Size: 21},
 	}}
-	a, ok := PickInstaller(rel)
-	if !ok {
-		t.Fatal("PickInstaller: expected ok=true")
+
+	// Modern Windows must get the mainline installer, never the win7 one.
+	if a, ok := PickInstaller(dual, false); !ok || a.URL != "https://x/win10" {
+		t.Errorf("PickInstaller(modern) = %+v ok=%v, want win10 asset", a, ok)
 	}
-	if a.Name != "kub-connect-amd64-installer.exe" || a.URL != "https://x/exe" {
-		t.Errorf("PickInstaller picked wrong asset: %+v", a)
+	// Win7/8 must get the windows7 installer (the mainline binary crashes there).
+	if a, ok := PickInstaller(dual, true); !ok || a.URL != "https://x/win7" {
+		t.Errorf("PickInstaller(legacy) = %+v ok=%v, want win7 asset", a, ok)
 	}
 
-	if _, ok := PickInstaller(Release{Assets: []Asset{{Name: "notes.txt"}}}); ok {
+	// Old single-installer release (pre-v1.2.0): both OSes fall back to it.
+	single := Release{Assets: []Asset{
+		{Name: "kub-connect-v1.1.3-windows-amd64-installer.exe", URL: "https://x/old", Size: 20},
+	}}
+	if a, ok := PickInstaller(single, false); !ok || a.URL != "https://x/old" {
+		t.Errorf("PickInstaller(modern, old release) = %+v ok=%v, want old asset", a, ok)
+	}
+	if a, ok := PickInstaller(single, true); !ok || a.URL != "https://x/old" {
+		t.Errorf("PickInstaller(legacy, old release) = %+v ok=%v, want old asset fallback", a, ok)
+	}
+
+	if _, ok := PickInstaller(Release{Assets: []Asset{{Name: "notes.txt"}}}, false); ok {
 		t.Error("PickInstaller: expected ok=false when no installer asset")
 	}
 }

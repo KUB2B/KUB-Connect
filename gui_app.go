@@ -268,7 +268,7 @@ func (a *App) DownloadAndInstall() error {
 	if err != nil {
 		return fmt.Errorf("проверка обновления: %w", err)
 	}
-	asset, ok := updater.PickInstaller(rel)
+	asset, ok := updater.PickInstaller(rel, updater.LegacyWindows())
 	if !ok {
 		return fmt.Errorf("установщик не найден в релизе %s", rel.TagName)
 	}
