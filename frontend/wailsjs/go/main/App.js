@@ -10,16 +10,16 @@ export function CheckUpdate() {
   return window['go']['main']['App']['CheckUpdate']();
 }
 
-export function DownloadAndInstall() {
-  return window['go']['main']['App']['DownloadAndInstall']();
-}
-
 export function Connect() {
   return window['go']['main']['App']['Connect']();
 }
 
 export function Disconnect() {
   return window['go']['main']['App']['Disconnect']();
+}
+
+export function DownloadAndInstall() {
+  return window['go']['main']['App']['DownloadAndInstall']();
 }
 
 export function GetState() {

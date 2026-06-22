@@ -7,11 +7,11 @@ export function AddServer(arg1:string):Promise<void>;
 
 export function CheckUpdate():Promise<main.UpdateInfo>;
 
-export function DownloadAndInstall():Promise<void>;
-
 export function Connect():Promise<void>;
 
 export function Disconnect():Promise<void>;
+
+export function DownloadAndInstall():Promise<void>;
 
 export function GetState():Promise<app.StateDTO>;
 
