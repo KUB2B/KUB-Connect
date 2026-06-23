@@ -3,7 +3,7 @@
 ## Windows
 
 1. Скачайте `kub-connect-vX.Y.Z-windows-amd64-installer.exe` со страницы
-   [Releases](https://github.com/zki/vless-client/releases).
+   [Releases](https://github.com/KUB2B/KUB-Connect/releases).
 2. При запуске Windows SmartScreen покажет «Система Windows защитила ваш
    компьютер» — приложение не подписано. Нажмите **Подробнее → Всё равно
    выполнить**.
@@ -28,14 +28,19 @@
   ([загрузчик Microsoft](https://go.microsoft.com/fwlink/p/?LinkId=2124703));
   на Win7 он ставит последнюю совместимую версию 109.
 
-## macOS
+## Linux
 
-1. Скачайте `kub-connect-vX.Y.Z-macos-universal.dmg` со страницы Releases.
-2. Откройте `.dmg`, перетащите «KUB Connect» в папку Applications.
-3. Запустите приложение (оно подписано и нотаризовано — предупреждений не будет).
-4. Добавьте `vless://…` ссылку, выберите режим **Proxy** и подключитесь.
-
-> На macOS доступен только режим **Proxy** — TUN в этой версии не реализован.
+1. Скачайте бинарь `kub-connect-vX.Y.Z-linux-amd64` со страницы
+   [Releases](https://github.com/KUB2B/KUB-Connect/releases).
+2. Сделайте исполняемым и запустите:
+   ```bash
+   chmod +x kub-connect-vX.Y.Z-linux-amd64
+   ./kub-connect-vX.Y.Z-linux-amd64
+   ```
+3. Нужен `webkit2gtk-4.1` (Ubuntu 24.04+) или `libwebkit2gtk-4.0` (старее).
+4. Добавьте `vless://…` ссылку и выберите режим:
+   - **Proxy** — системный SOCKS, без прав root.
+   - **TUN** — полный перехват, запустите через `sudo`.
 
 ## Как работает маршрутизация
 
@@ -43,9 +48,10 @@
 (direct), а в VPN заворачиваются только Telegram и ваши кастомные IP/домены.
 Правила `geoip:ru` / `geosite:category-ru` всегда идут напрямую.
 
-## Известные ограничения (v0.1.0)
+## Известные ограничения
 
-- **Kill switch** не реализован на Windows и macOS.
-- **macOS** — только режим Proxy (TUN не поддерживается).
+- **Kill switch** работает только в режиме TUN на Linux; на Windows не реализован.
+- **macOS** не поддерживается.
 - **Windows** — бинарь не подписан, SmartScreen покажет предупреждение.
-- Нет авто-обновления — следите за страницей Releases.
+- Авто-обновление доступно только на Windows; на Linux обновляйте вручную со
+  страницы Releases.
