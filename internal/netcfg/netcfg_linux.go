@@ -28,6 +28,13 @@ func downCommands(c Config) [][]string {
 	return cmds
 }
 
+// DefaultInterfaceName returns the physical default-route interface name, used
+// to bind xray's outbound sockets (sockopt.interface → SO_BINDTODEVICE) so
+// direct traffic cannot loop back into the TUN.
+func DefaultInterfaceName() (string, error) {
+	_, dev, err := defaultGateway()
+	return dev, err
+}
 
 func (linuxRouter) Up(c Config) error {
 	if c.FullTunnel {

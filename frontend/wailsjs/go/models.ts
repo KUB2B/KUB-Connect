@@ -38,12 +38,29 @@ export namespace app {
 	        this.error = source["error"];
 	    }
 	}
+	export class PresetDTO {
+	    key: string;
+	    title: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PresetDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.title = source["title"];
+	    }
+	}
 	export class ProfileDTO {
 	    full: boolean;
 	    telegram: boolean;
 	    forceRUDirect: boolean;
 	    customProxyDomains: string[];
 	    customProxyIPs: string[];
+	    proxyPresets: string[];
+	    customDirectDomains: string[];
+	    customDirectIPs: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new ProfileDTO(source);
@@ -56,6 +73,9 @@ export namespace app {
 	        this.forceRUDirect = source["forceRUDirect"];
 	        this.customProxyDomains = source["customProxyDomains"];
 	        this.customProxyIPs = source["customProxyIPs"];
+	        this.proxyPresets = source["proxyPresets"];
+	        this.customDirectDomains = source["customDirectDomains"];
+	        this.customDirectIPs = source["customDirectIPs"];
 	    }
 	}
 	export class ServerDTO {

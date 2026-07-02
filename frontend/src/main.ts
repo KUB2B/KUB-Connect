@@ -22,9 +22,32 @@ type Profile = {
   full: boolean;
   telegram: boolean;
   forceRUDirect: boolean;
+  // Go nil slices arrive as null at runtime; readers use `?? []`.
   customProxyDomains: string[];
   customProxyIPs: string[];
+  proxyPresets: string[];
+  customDirectDomains: string[];
+  customDirectIPs: string[];
 };
+
+// Keep in sync with routing.Presets (internal/routing/profile.go).
+const PRESETS: { key: string; title: string }[] = [
+  { key: "youtube", title: "YouTube" },
+  { key: "instagram", title: "Instagram" },
+  { key: "facebook", title: "Facebook" },
+  { key: "twitter", title: "Twitter / X" },
+  { key: "discord", title: "Discord" },
+  { key: "netflix", title: "Netflix" },
+  { key: "spotify", title: "Spotify" },
+  { key: "openai", title: "ChatGPT (OpenAI)" },
+];
+
+// Mirrors backend validation: bare IPv4/IPv6 or CIDR goes to the IP list,
+// everything else is treated as a domain rule (geosite: prefixes contain
+// non-hex letters, so they never match the IPv6 branch).
+const looksLikeIP = (s: string) =>
+  /^\d{1,3}(\.\d{1,3}){3}(\/\d{1,2})?$/.test(s) ||
+  (s.includes(":") && /^[0-9a-fA-F:]+(\/\d{1,3})?$/.test(s));
 type Settings = {
   mode: string;
   autoConnect: boolean;
@@ -91,7 +114,15 @@ function connectionHint(mode: string): string {
 function routingHint(full: boolean): string {
   return full
     ? "Весь трафик через туннель. Российские сайты можно оставить напрямую."
-    : "В VPN идёт только Telegram. Остальное — напрямую.";
+    : "В VPN — Telegram, отмеченные сервисы и свои адреса. Остальное напрямую.";
+}
+
+// setListArea fills a textarea from the split domain/IP lists, unless the user
+// is typing in it (a `state` re-render mid-edit must not clobber the draft).
+function setListArea(id: string, ...lists: (string[] | null | undefined)[]) {
+  const el = <HTMLTextAreaElement>$(id);
+  if (document.activeElement === el) return;
+  el.value = lists.flatMap((l) => l ?? []).join("\n");
 }
 
 function render(st: State) {
@@ -165,6 +196,12 @@ function render(st: State) {
 
   (<HTMLInputElement>$("tg-toggle")).checked = st.profile.telegram;
   (<HTMLInputElement>$("ru-toggle")).checked = st.profile.forceRUDirect;
+  const selectedPresets = st.profile.proxyPresets ?? [];
+  document.querySelectorAll<HTMLInputElement>("#preset-list input").forEach((cb) => {
+    cb.checked = selectedPresets.includes(cb.value);
+  });
+  setListArea("proxy-list", st.profile.customProxyDomains, st.profile.customProxyIPs);
+  setListArea("direct-list", st.profile.customDirectDomains, st.profile.customDirectIPs);
   const routingSel = <HTMLSelectElement>$("routing-mode-select");
   routingSel.value = st.profile.full ? "full" : "whitelist";
   $("whitelist-only").classList.toggle("hidden", st.profile.full);
@@ -280,13 +317,57 @@ function wire() {
       });
   });
 
+  const pushProfile = () => {
+    UpdateProfile(current.profile)
+      .then(() => ($("routing-error").textContent = ""))
+      .catch((e) => ($("routing-error").textContent = String(e)));
+  };
+
   $("tg-toggle").addEventListener("change", () => {
     current.profile.telegram = (<HTMLInputElement>$("tg-toggle")).checked;
-    UpdateProfile(current.profile);
+    pushProfile();
   });
   $("ru-toggle").addEventListener("change", () => {
     current.profile.forceRUDirect = (<HTMLInputElement>$("ru-toggle")).checked;
-    UpdateProfile(current.profile);
+    pushProfile();
+  });
+
+  // Preset checkboxes (built once; render() syncs the checked state).
+  const presetBox = $("preset-list");
+  PRESETS.forEach((p) => {
+    const label = document.createElement("label");
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.value = p.key;
+    cb.addEventListener("change", () => {
+      current.profile.proxyPresets = Array.from(
+        document.querySelectorAll<HTMLInputElement>("#preset-list input:checked"),
+      ).map((c) => c.value);
+      pushProfile();
+    });
+    label.append(cb, " " + p.title);
+    presetBox.append(label);
+  });
+
+  // Address lists: one entry per line; IPs/CIDRs and domains are split into the
+  // profile's separate lists (backend validates each).
+  const wireListArea = (id: string, apply: (domains: string[], ips: string[]) => void) => {
+    $(id).addEventListener("change", () => {
+      const lines = (<HTMLTextAreaElement>$(id)).value
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      apply(lines.filter((l) => !looksLikeIP(l)), lines.filter(looksLikeIP));
+      pushProfile();
+    });
+  };
+  wireListArea("proxy-list", (domains, ips) => {
+    current.profile.customProxyDomains = domains;
+    current.profile.customProxyIPs = ips;
+  });
+  wireListArea("direct-list", (domains, ips) => {
+    current.profile.customDirectDomains = domains;
+    current.profile.customDirectIPs = ips;
   });
   $("routing-mode-select").addEventListener("change", () => {
     const full = (<HTMLSelectElement>$("routing-mode-select")).value === "full";

@@ -304,3 +304,94 @@ func TestLogsReturnsBufferedLines(t *testing.T) {
 		t.Errorf("Logs = %v, want [hello]", got)
 	}
 }
+
+// bindDeps is testDeps plus a DefaultInterface stub returning name.
+func bindDeps(t *testing.T, name string) (*Service, *ConnConfig) {
+	t.Helper()
+	svc, _, _, captured := testDeps(t)
+	svc.deps.DefaultInterface = func() (string, error) { return name, nil }
+	return svc, captured
+}
+
+func TestConnectTUNWhitelistFullCaptureWithBind(t *testing.T) {
+	svc, captured := bindDeps(t, "eth0")
+	mustAdd(t, svc, fullSampleLink)
+	if err := svc.UpdateProfile(ProfileDTO{Telegram: true}); err != nil {
+		t.Fatalf("UpdateProfile: %v", err)
+	}
+	if err := svc.Connect(); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	if !captured.FullTunnel {
+		t.Error("whitelist + bind interface must use full-capture (FullTunnel)")
+	}
+	if captured.BlockIPv6 {
+		t.Error("whitelist mode must not block IPv6")
+	}
+	if len(captured.ServerIPs) == 0 {
+		t.Error("ServerIPs bypass should be populated")
+	}
+	// Kill-switch CIDR list survives the capture-model switch.
+	if !sliceContains(captured.RouteCIDRs, routing.TelegramCIDRs[0]) {
+		t.Errorf("RouteCIDRs missing telegram CIDRs: %v", captured.RouteCIDRs)
+	}
+	if !strings.Contains(string(captured.XrayJSON), `"interface":"eth0"`) {
+		t.Errorf("xray JSON missing sockopt interface binding: %s", captured.XrayJSON)
+	}
+}
+
+func TestConnectTUNFullWithBindBlocksIPv6(t *testing.T) {
+	svc, captured := bindDeps(t, "eth0")
+	mustAdd(t, svc, fullSampleLink)
+	if err := svc.UpdateProfile(ProfileDTO{Full: true}); err != nil {
+		t.Fatalf("UpdateProfile: %v", err)
+	}
+	if err := svc.Connect(); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	if !captured.FullTunnel || !captured.BlockIPv6 {
+		t.Errorf("full + bind: FullTunnel=%v BlockIPv6=%v, want true/true",
+			captured.FullTunnel, captured.BlockIPv6)
+	}
+}
+
+func TestConnectProxyModeSkipsBind(t *testing.T) {
+	svc, _, _, captured := connectReadyService(t)
+	svc.deps.DefaultInterface = func() (string, error) {
+		t.Error("DefaultInterface must not be called in proxy mode")
+		return "", nil
+	}
+	if err := svc.Connect(); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	if strings.Contains(string(captured.XrayJSON), "sockopt") {
+		t.Error("proxy mode must not bind outbounds to an interface")
+	}
+}
+
+func TestUpdateProfileValidation(t *testing.T) {
+	svc, _, _, _ := testDeps(t)
+	if err := svc.UpdateProfile(ProfileDTO{CustomProxyIPs: []string{"not-an-ip"}}); err == nil {
+		t.Error("bad IP must be rejected")
+	}
+	if err := svc.UpdateProfile(ProfileDTO{CustomDirectDomains: []string{"http://x.com"}}); err == nil {
+		t.Error("URL as domain must be rejected")
+	}
+	if err := svc.UpdateProfile(ProfileDTO{ProxyPresets: []string{"nope"}}); err == nil {
+		t.Error("unknown preset must be rejected")
+	}
+	err := svc.UpdateProfile(ProfileDTO{
+		ProxyPresets:        []string{"youtube"},
+		CustomProxyDomains:  []string{" geosite:google ", ""},
+		CustomProxyIPs:      []string{"1.2.3.4", "10.0.0.0/8", "2a0a:f280::/32"},
+		CustomDirectDomains: []string{"sberbank.ru"},
+		CustomDirectIPs:     []string{"77.88.8.8"},
+	})
+	if err != nil {
+		t.Fatalf("valid profile rejected: %v", err)
+	}
+	p := svc.GetState().Profile
+	if len(p.CustomProxyDomains) != 1 || p.CustomProxyDomains[0] != "geosite:google" {
+		t.Errorf("lists not cleaned: %+v", p.CustomProxyDomains)
+	}
+}

@@ -96,6 +96,11 @@ type Deps struct {
 	// When false and the persisted mode is TUN, the mode is coerced to proxy at
 	// startup (see New).
 	TUNSupported func() bool
+	// DefaultInterface returns the physical default-route interface name
+	// (netcfg.DefaultInterfaceName), used in TUN mode to bind xray's outbound
+	// sockets so direct traffic exits via the NIC instead of looping into the
+	// TUN. Nil or an error selects the legacy selective-route capture model.
+	DefaultInterface func() (string, error)
 	// Autostart registers launch-on-login (autostart.New()). Nil is treated as
 	// unsupported, so tests need not set it.
 	Autostart AutostartManager
@@ -116,11 +121,20 @@ type ServerDTO struct {
 
 // ProfileDTO mirrors routing.Profile for the frontend.
 type ProfileDTO struct {
-	Full               bool     `json:"full"`
-	Telegram           bool     `json:"telegram"`
-	ForceRUDirect      bool     `json:"forceRUDirect"`
-	CustomProxyDomains []string `json:"customProxyDomains"`
-	CustomProxyIPs     []string `json:"customProxyIPs"`
+	Full                bool     `json:"full"`
+	Telegram            bool     `json:"telegram"`
+	ForceRUDirect       bool     `json:"forceRUDirect"`
+	CustomProxyDomains  []string `json:"customProxyDomains"`
+	CustomProxyIPs      []string `json:"customProxyIPs"`
+	ProxyPresets        []string `json:"proxyPresets"`
+	CustomDirectDomains []string `json:"customDirectDomains"`
+	CustomDirectIPs     []string `json:"customDirectIPs"`
+}
+
+// PresetDTO is one selectable service preset.
+type PresetDTO struct {
+	Key   string `json:"key"`
+	Title string `json:"title"`
 }
 
 // SettingsDTO mirrors store.Settings for the frontend.
@@ -173,11 +187,14 @@ func serverDTO(s *vless.ServerConfig) ServerDTO {
 
 func profileDTO(p routing.Profile) ProfileDTO {
 	return ProfileDTO{
-		Full:               p.Full,
-		Telegram:           p.Telegram,
-		ForceRUDirect:      p.ForceRUDirect,
-		CustomProxyDomains: p.CustomProxyDomains,
-		CustomProxyIPs:     p.CustomProxyIPs,
+		Full:                p.Full,
+		Telegram:            p.Telegram,
+		ForceRUDirect:       p.ForceRUDirect,
+		CustomProxyDomains:  p.CustomProxyDomains,
+		CustomProxyIPs:      p.CustomProxyIPs,
+		ProxyPresets:        p.ProxyPresets,
+		CustomDirectDomains: p.CustomDirectDomains,
+		CustomDirectIPs:     p.CustomDirectIPs,
 	}
 }
 

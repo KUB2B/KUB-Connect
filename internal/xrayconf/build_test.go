@@ -89,8 +89,8 @@ func TestBuildMuxDropsVisionFlowAndEnablesMux(t *testing.T) {
 	}
 	var cfg struct {
 		Outbounds []struct {
-			Tag      string `json:"tag"`
-			Mux      *struct {
+			Tag string `json:"tag"`
+			Mux *struct {
 				Enabled     bool `json:"enabled"`
 				Concurrency int  `json:"concurrency"`
 			} `json:"mux"`
@@ -234,5 +234,41 @@ func TestBuildFullTunnelRouting(t *testing.T) {
 	}
 	if !strings.Contains(s, `"::/0"`) {
 		t.Error("full-mode config should contain the IPv6 block rule")
+	}
+}
+
+func TestBuildBindInterface(t *testing.T) {
+	srv := sampleServer()
+	data, err := Build(srv, routing.Default(), Options{BindInterface: "Ethernet 2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	outs := cfg["outbounds"].([]any)
+	for i, want := range []string{"proxy", "direct"} {
+		out := outs[i].(map[string]any)
+		if out["tag"] != want {
+			t.Fatalf("outbound[%d] tag = %v, want %s", i, out["tag"], want)
+		}
+		ss, _ := out["streamSettings"].(map[string]any)
+		if ss == nil {
+			t.Fatalf("%s outbound missing streamSettings", want)
+		}
+		so, _ := ss["sockopt"].(map[string]any)
+		if so == nil || so["interface"] != "Ethernet 2" {
+			t.Errorf("%s outbound sockopt = %v, want interface Ethernet 2", want, ss["sockopt"])
+		}
+	}
+
+	// Without the option no sockopt (and no empty streamSettings on direct).
+	data, err = Build(srv, routing.Default(), Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "sockopt") {
+		t.Error("sockopt must be absent when BindInterface is empty")
 	}
 }

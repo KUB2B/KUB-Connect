@@ -113,7 +113,9 @@ func (t *Tunnel) Start() error {
 			t.inst = nil
 			return fmt.Errorf("apply routes: %w", err)
 		}
-		if t.cfg.KillSwitch && !t.cfg.Full {
+		// Kill switch guards the whitelisted CIDRs; with none (classic full
+		// tunnel) there is nothing to guard, so it is skipped.
+		if t.cfg.KillSwitch && len(t.cfg.RouteCIDRs) > 0 {
 			if err := t.deps.Firewall.On(firewall.Config{Device: t.cfg.Device, CIDRs: t.cfg.RouteCIDRs}); err != nil {
 				_ = t.deps.Router.Down(t.netcfgConfig())
 				_ = t.deps.Tun.Stop()
@@ -144,7 +146,7 @@ func (t *Tunnel) Stop() error {
 	case store.ModeProxy:
 		record(t.deps.Proxy.Clear())
 	case store.ModeTUN:
-		if t.cfg.KillSwitch && !t.cfg.Full {
+		if t.cfg.KillSwitch && len(t.cfg.RouteCIDRs) > 0 {
 			record(t.deps.Firewall.Off())
 		}
 		record(t.deps.Router.Down(t.netcfgConfig()))

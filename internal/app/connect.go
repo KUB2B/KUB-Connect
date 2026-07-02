@@ -13,9 +13,11 @@ import (
 	"github.com/zki/vless-client/internal/xrayconf"
 )
 
-// tunRouteCIDRs is the set of destination IP CIDRs steered into the TUN under
-// the selective host-route model: Telegram's published ranges (when enabled)
-// plus the user's custom proxy IPs. Domain-based rules cannot be host-routed.
+// tunRouteCIDRs is the set of whitelisted destination IP CIDRs: Telegram's
+// published ranges (when enabled) plus the user's custom proxy IPs. Under the
+// legacy selective host-route model these are the routes steered into the TUN
+// (domain-based rules cannot be host-routed there); under full capture they
+// only feed the kill-switch firewall.
 //
 // IPv6 ranges are deliberately excluded. Each proxied connection becomes its own
 // Reality+Vision handshake to the server (Vision is incompatible with mux, so
@@ -66,6 +68,21 @@ func (s *Service) elevated() bool {
 	return s.deps.Elevated == nil || s.deps.Elevated()
 }
 
+// bindInterface returns the physical default-route interface name, or "" when
+// discovery is unsupported or fails (logged; the caller falls back to the
+// legacy capture model).
+func (s *Service) bindInterface() string {
+	if s.deps.DefaultInterface == nil {
+		return ""
+	}
+	name, err := s.deps.DefaultInterface()
+	if err != nil {
+		s.bus.Append("warning: default interface discovery: " + err.Error())
+		return ""
+	}
+	return name
+}
+
 // xrayLogPath is where xray writes its error log, tailed into the log bus.
 func (s *Service) xrayLogPath() string {
 	return filepath.Join(s.deps.LogDir, "xray.log")
@@ -100,6 +117,15 @@ func (s *Service) Connect() error {
 	s.bus.Append(fmt.Sprintf("connecting to %s (%s:%d)", srv.Name, srv.Host, srv.Port))
 	s.setConn(ConnConnecting, "")
 
+	// TUN mode binds xray's outbound sockets to the physical interface so
+	// direct-tagged traffic exits via the NIC instead of looping back into the
+	// TUN under the split-default routes. Discovered before Build because the
+	// xray config carries the binding.
+	bindIface := ""
+	if mode == store.ModeTUN {
+		bindIface = s.bindInterface()
+	}
+
 	cfgJSON, err := xrayconf.Build(srv, s.state.Profile, xrayconf.Options{
 		SocksPort: socksPort,
 		LogFile:   s.xrayLogPath(),
@@ -107,7 +133,8 @@ func (s *Service) Connect() error {
 		// Mux tames the Telegram connection storm. It drops the xtls-rprx-vision
 		// flow, so it only works when the server's client is configured with no
 		// flow. User-gated to avoid breaking vision-only servers.
-		Mux: s.state.Settings.Mux,
+		Mux:           s.state.Settings.Mux,
+		BindInterface: bindIface,
 	})
 	if err != nil {
 		s.setConn(ConnError, err.Error())
@@ -127,16 +154,34 @@ func (s *Service) Connect() error {
 		cc.TunIP = tunIP
 		cc.TunPrefix = tunPrefix
 		cc.RouteCIDRs = tunRouteCIDRs(s.state.Profile)
-		if s.state.Profile.Full {
+		cc.ServerIPs = resolveServerIPv4(srv.Host)
+		switch {
+		case bindIface != "":
+			// Full-capture model: split-default routes steer all IPv4 into the
+			// TUN and xray's rules decide proxy vs direct. Safe because the
+			// outbounds are bound to bindIface. Domain-based rules (geosite,
+			// presets, custom domains) work in both routing modes.
+			cc.FullTunnel = true
+			cc.BlockIPv6 = s.state.Profile.Full
+			if len(cc.ServerIPs) == 0 {
+				s.bus.Append("warning: could not resolve server IP for bypass route")
+			}
+		case s.state.Profile.Full:
+			// Legacy full tunnel without a bound interface: direct exceptions
+			// (RU напрямую, свои исключения) would loop — warn loudly.
 			cc.FullTunnel = true
 			cc.BlockIPv6 = true
-			cc.ServerIPs = resolveServerIPv4(srv.Host)
+			cc.RouteCIDRs = nil
+			s.bus.Append("warning: physical interface unknown — direct exceptions may loop; disable 'RU напрямую' if browsing breaks")
 			if len(cc.ServerIPs) == 0 {
 				s.bus.Append("warning: could not resolve server IP for bypass; full-tunnel may loop")
 			}
-			cc.RouteCIDRs = nil // split-default replaces selective routes
+		default:
+			// Legacy selective host-route model: only whitelisted IPs enter the
+			// TUN, so domain rules cannot capture traffic.
+			cc.ServerIPs = nil
+			s.bus.Append("note: physical interface unknown — TUN routes whitelisted IPs only; domains/presets are not captured")
 		}
-		s.bus.Append("note: TUN mode routes whitelisted IPs only; geosite domains are not host-routed")
 		if s.state.Settings.KillSwitch {
 			if s.killSwitchSupported() {
 				cc.KillSwitch = true

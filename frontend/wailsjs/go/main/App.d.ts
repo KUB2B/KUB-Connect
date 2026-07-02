@@ -21,6 +21,8 @@ export function Logs():Promise<Array<string>>;
 
 export function Ping(arg1:number):Promise<app.PingResultDTO>;
 
+export function Presets():Promise<Array<app.PresetDTO>>;
+
 export function QuitApp():Promise<void>;
 
 export function RelaunchElevated(arg1:boolean):Promise<void>;

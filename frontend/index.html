@@ -29,7 +29,10 @@
       <section id="tab-home" class="tab-panel">
         <div class="home">
           <button id="power-btn" class="power disconnected" title="Подключить/отключить">
-            <span class="power-glyph">⏻</span>
+            <svg class="power-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+              <line x1="12" y1="2" x2="12" y2="12"></line>
+            </svg>
           </button>
           <div id="status-text" class="status-text">Отключено</div>
           <label class="server-pick">
@@ -71,11 +74,26 @@
         <div id="whitelist-only">
           <label><input type="checkbox" id="tg-toggle" /> Telegram → VPN</label>
           <span class="hint">Заворачивать Telegram в туннель.</span>
+          <div id="preset-list" class="preset-list"></div>
+          <span class="hint">Отмеченные сервисы идут через VPN. Если сервер пропускает только Telegram — оставьте всё выключенным.</span>
+          <label class="col">
+            <span class="label">Свои адреса через VPN</span>
+            <textarea id="proxy-list" rows="4" spellcheck="false"
+              placeholder="youtube.com&#10;geosite:google&#10;1.2.3.4&#10;10.20.0.0/16"></textarea>
+          </label>
+          <span class="hint">По одной записи в строке: домен, geosite:категория, IP или CIDR.</span>
         </div>
         <div id="full-only">
           <label><input type="checkbox" id="ru-toggle" /> RU напрямую</label>
           <span class="hint">Российские сайты (geoip:ru) — мимо VPN. Быстрее и без блокировок зарубежных сервисов.</span>
         </div>
+        <label class="col">
+          <span class="label">Исключения — всегда мимо VPN</span>
+          <textarea id="direct-list" rows="3" spellcheck="false"
+            placeholder="sberbank.ru&#10;gosuslugi.ru&#10;77.88.8.8"></textarea>
+        </label>
+        <span class="hint">Домены и IP, которые никогда не заворачиваются в туннель (в обоих режимах).</span>
+        <p id="routing-error" class="error"></p>
         <div id="kill-row">
           <label><input type="checkbox" id="kill-toggle" /> Kill switch</label>
           <span class="hint">Если VPN отвалится — блокировать трафик выбранных адресов, чтобы он не утёк напрямую.</span>

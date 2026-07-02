@@ -38,6 +38,10 @@ export function Ping(arg1) {
   return window['go']['main']['App']['Ping'](arg1);
 }
 
+export function Presets() {
+  return window['go']['main']['App']['Presets']();
+}
+
 export function QuitApp() {
   return window['go']['main']['App']['QuitApp']();
 }

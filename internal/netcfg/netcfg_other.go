@@ -17,6 +17,11 @@ func New() Router { return unsupportedRouter{} }
 // Supported reports whether TUN routing is implemented on this OS.
 func Supported() bool { return false }
 
+// DefaultInterfaceName is unsupported on this OS.
+func DefaultInterfaceName() (string, error) {
+	return "", fmt.Errorf("netcfg: default interface discovery not supported on %s", runtime.GOOS)
+}
+
 func (unsupportedRouter) Up(Config) error {
 	return fmt.Errorf("netcfg: TUN routing not supported on %s yet", runtime.GOOS)
 }

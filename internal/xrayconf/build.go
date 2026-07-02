@@ -23,6 +23,13 @@ type Options struct {
 	// outbound — the server's client must be configured with no flow (Reality
 	// still applies) for the handshake to match.
 	Mux bool
+	// BindInterface binds the proxy and direct outbounds' sockets to the named
+	// physical network interface (xray sockopt.interface: SO_BINDTODEVICE on
+	// Linux, IP_UNICAST_IF on Windows). In TUN mode this is what keeps
+	// direct-tagged traffic (and the encrypted server connection) from being
+	// routed back into the TUN by the split-default routes and looping. Empty
+	// leaves the sockets unbound.
+	BindInterface string
 }
 
 type xrayConfig struct {
@@ -82,12 +89,17 @@ type muxConf struct {
 }
 
 type streamSettings struct {
-	Network         string           `json:"network"`
-	Security        string           `json:"security"`
+	Network         string           `json:"network,omitempty"`
+	Security        string           `json:"security,omitempty"`
 	RealitySettings *realitySettings `json:"realitySettings,omitempty"`
 	TLSSettings     *tlsSettings     `json:"tlsSettings,omitempty"`
 	WSSettings      *wsSettings      `json:"wsSettings,omitempty"`
 	GRPCSettings    *grpcSettings    `json:"grpcSettings,omitempty"`
+	Sockopt         *sockoptConf     `json:"sockopt,omitempty"`
+}
+
+type sockoptConf struct {
+	Interface string `json:"interface,omitempty"`
 }
 
 type realitySettings struct {
@@ -140,6 +152,13 @@ func Build(s *vless.ServerConfig, p routing.Profile, opts Options) ([]byte, erro
 		return nil, err
 	}
 
+	directOut := outbound{Tag: "direct", Protocol: "freedom"}
+	if opts.BindInterface != "" {
+		bind := &sockoptConf{Interface: opts.BindInterface}
+		proxyOut.StreamSettings.Sockopt = bind
+		directOut.StreamSettings = &streamSettings{Sockopt: bind}
+	}
+
 	cfg := xrayConfig{
 		Log: logConf{LogLevel: orDefault(opts.LogLevel, "warning"), Error: opts.LogFile},
 		DNS: dnsConf{Servers: []any{"1.1.1.1", "localhost"}},
@@ -153,7 +172,7 @@ func Build(s *vless.ServerConfig, p routing.Profile, opts Options) ([]byte, erro
 		}},
 		Outbounds: []outbound{
 			proxyOut,
-			{Tag: "direct", Protocol: "freedom"},
+			directOut,
 			{Tag: "block", Protocol: "blackhole"},
 		},
 		Routing: routingConf{

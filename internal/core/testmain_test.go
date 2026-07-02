@@ -36,6 +36,12 @@ func TestMain(m *testing.M) {
 					{Type: router.Domain_Domain, Value: "telegram.org"},
 				},
 			},
+			{
+				CountryCode: "YOUTUBE",
+				Domain: []*router.Domain{
+					{Type: router.Domain_Domain, Value: "youtube.com"},
+				},
+			},
 		},
 	}
 	geositeBytes, err := proto.Marshal(geosite)

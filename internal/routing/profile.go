@@ -37,6 +37,38 @@ var TelegramCIDRs = []string{
 	"2a0a:f280::/32",
 }
 
+// Preset is a bundled service routed through the VPN when selected in
+// whitelist mode. Domains are xray domain-rule entries (geosite: categories
+// from the shipped geosite.dat).
+type Preset struct {
+	Key     string
+	Title   string
+	Domains []string
+}
+
+// Presets is the fixed set of service presets offered in the UI. Keys are
+// persisted in Profile.ProxyPresets, so they must stay stable.
+var Presets = []Preset{
+	{Key: "youtube", Title: "YouTube", Domains: []string{"geosite:youtube"}},
+	{Key: "instagram", Title: "Instagram", Domains: []string{"geosite:instagram"}},
+	{Key: "facebook", Title: "Facebook", Domains: []string{"geosite:facebook"}},
+	{Key: "twitter", Title: "Twitter / X", Domains: []string{"geosite:twitter"}},
+	{Key: "discord", Title: "Discord", Domains: []string{"geosite:discord"}},
+	{Key: "netflix", Title: "Netflix", Domains: []string{"geosite:netflix"}},
+	{Key: "spotify", Title: "Spotify", Domains: []string{"geosite:spotify"}},
+	{Key: "openai", Title: "ChatGPT (OpenAI)", Domains: []string{"geosite:openai"}},
+}
+
+// PresetByKey returns the preset with the given key, or false.
+func PresetByKey(key string) (Preset, bool) {
+	for _, p := range Presets {
+		if p.Key == key {
+			return p, true
+		}
+	}
+	return Preset{}, false
+}
+
 // Profile is the user's routing choices. Full selects the full-tunnel model
 // (everything through the VPN); otherwise the whitelist model applies.
 type Profile struct {
@@ -45,6 +77,38 @@ type Profile struct {
 	ForceRUDirect      bool
 	CustomProxyDomains []string
 	CustomProxyIPs     []string
+	// ProxyPresets are Preset keys routed through the VPN in whitelist mode
+	// (subsumed by the catch-all proxy rule in full mode).
+	ProxyPresets []string
+	// CustomDirectDomains/IPs are user exceptions that always bypass the VPN.
+	// They win over every proxy rule in both models.
+	CustomDirectDomains []string
+	CustomDirectIPs     []string
+}
+
+// presetDomains aggregates the domain entries of the selected presets,
+// silently skipping unknown keys (stale state after a preset is removed).
+func (p Profile) presetDomains() []string {
+	var domains []string
+	for _, key := range p.ProxyPresets {
+		if preset, ok := PresetByKey(key); ok {
+			domains = append(domains, preset.Domains...)
+		}
+	}
+	return domains
+}
+
+// directExceptions returns the user's bypass rules, emitted first so they win
+// over every proxy match.
+func (p Profile) directExceptions() []Rule {
+	var rules []Rule
+	if len(p.CustomDirectDomains) > 0 {
+		rules = append(rules, Rule{Outbound: OutboundDirect, Domains: p.CustomDirectDomains})
+	}
+	if len(p.CustomDirectIPs) > 0 {
+		rules = append(rules, Rule{Outbound: OutboundDirect, IPs: p.CustomDirectIPs})
+	}
+	return rules
 }
 
 // Rule is one xray routing rule, outbound-tagged.
@@ -64,6 +128,7 @@ func (p Profile) Rules() []Rule {
 	}
 
 	var rules []Rule
+	rules = append(rules, p.directExceptions()...)
 
 	if p.ForceRUDirect {
 		rules = append(rules,
@@ -79,6 +144,9 @@ func (p Profile) Rules() []Rule {
 			Rule{Outbound: OutboundProxy, IPs: TelegramCIDRs},
 		)
 	}
+	if domains := p.presetDomains(); len(domains) > 0 {
+		rules = append(rules, Rule{Outbound: OutboundProxy, Domains: domains})
+	}
 	if len(p.CustomProxyDomains) > 0 {
 		rules = append(rules, Rule{Outbound: OutboundProxy, Domains: p.CustomProxyDomains})
 	}
@@ -93,8 +161,14 @@ func (p Profile) Rules() []Rule {
 // fullRules is the full-tunnel rule set: keep LAN (and optionally RU) direct,
 // blackhole all IPv6 (it is captured into the TUN but the server path is IPv4
 // only — see netcfg BlockIPv6), and send everything else to the proxy.
+//
+// Under TUN split-default routes, direct rules for public destinations (RU,
+// custom exceptions) only work when the direct outbound is bound to the
+// physical interface (xrayconf Options.BindInterface); an unbound direct dial
+// would be routed back into the TUN and loop.
 func (p Profile) fullRules() []Rule {
 	var rules []Rule
+	rules = append(rules, p.directExceptions()...)
 	if p.ForceRUDirect {
 		rules = append(rules,
 			Rule{Outbound: OutboundDirect, Domains: []string{"geosite:category-ru"}},

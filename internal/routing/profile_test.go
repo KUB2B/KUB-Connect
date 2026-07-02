@@ -122,3 +122,41 @@ func TestRulesWhitelistUnchanged(t *testing.T) {
 		t.Fatalf("whitelist catch-all = %+v, want direct tcp,udp", last)
 	}
 }
+
+func TestRulesPresetsAndDirectExceptions(t *testing.T) {
+	p := Profile{
+		Telegram:            true,
+		ProxyPresets:        []string{"youtube", "bogus"},
+		CustomDirectDomains: []string{"sberbank.ru"},
+		CustomDirectIPs:     []string{"77.88.8.8"},
+	}
+	rules := p.Rules()
+
+	if !hasProxyDomain(rules, "geosite:youtube") {
+		t.Error("selected preset must emit its geosite domains -> proxy")
+	}
+	for _, r := range rules {
+		if contains(r.Domains, "bogus") {
+			t.Error("unknown preset key must be skipped, not emitted")
+		}
+	}
+	// Direct exceptions come first so they beat any proxy match.
+	if rules[0].Outbound != OutboundDirect || !contains(rules[0].Domains, "sberbank.ru") {
+		t.Errorf("rule[0] = %+v, want direct sberbank.ru", rules[0])
+	}
+	if rules[1].Outbound != OutboundDirect || !contains(rules[1].IPs, "77.88.8.8") {
+		t.Errorf("rule[1] = %+v, want direct 77.88.8.8", rules[1])
+	}
+}
+
+func TestFullRulesDirectExceptionsFirst(t *testing.T) {
+	p := Profile{Full: true, CustomDirectDomains: []string{"gosuslugi.ru"}}
+	rules := p.Rules()
+	if rules[0].Outbound != OutboundDirect || !contains(rules[0].Domains, "gosuslugi.ru") {
+		t.Errorf("rule[0] = %+v, want direct gosuslugi.ru", rules[0])
+	}
+	last := rules[len(rules)-1]
+	if last.Outbound != OutboundProxy {
+		t.Errorf("catch-all = %+v, want proxy", last)
+	}
+}

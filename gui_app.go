@@ -104,6 +104,7 @@ func (a *App) startup(ctx context.Context) {
 		Elevated:            privilege.IsElevated,
 		KillSwitchSupported: firewall.Supported,
 		TUNSupported:        netcfg.Supported,
+		DefaultInterface:    netcfg.DefaultInterfaceName,
 		Autostart:           autostart.New(),
 		OS:                  runtime.GOOS,
 		Version:             version,
@@ -297,10 +298,16 @@ func (a *App) GetState() app.StateDTO {
 	}
 	return a.svc.GetState()
 }
-func (a *App) AddServer(link string) error            { return a.svc.AddServer(link) }
-func (a *App) RemoveServer(index int) error           { return a.svc.RemoveServer(index) }
-func (a *App) SetActiveServer(index int) error        { return a.svc.SetActiveServer(index) }
-func (a *App) UpdateProfile(p app.ProfileDTO) error   { return a.svc.UpdateProfile(p) }
+func (a *App) AddServer(link string) error          { return a.svc.AddServer(link) }
+func (a *App) RemoveServer(index int) error         { return a.svc.RemoveServer(index) }
+func (a *App) SetActiveServer(index int) error      { return a.svc.SetActiveServer(index) }
+func (a *App) UpdateProfile(p app.ProfileDTO) error { return a.svc.UpdateProfile(p) }
+func (a *App) Presets() []app.PresetDTO {
+	if a.svc == nil {
+		return nil
+	}
+	return a.svc.Presets()
+}
 func (a *App) UpdateSettings(s app.SettingsDTO) error { return a.svc.UpdateSettings(s) }
 func (a *App) Connect() error                         { return a.svc.Connect() }
 func (a *App) Disconnect() error                      { return a.svc.Disconnect() }
