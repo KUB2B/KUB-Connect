@@ -118,6 +118,9 @@ function maybeShowOnboarding(st: State) {
 // Ephemeral ping results, keyed by `${host}:${port}` so they survive re-renders
 // and index shifts when a server is removed.
 const pingResults: Record<string, string> = {};
+// Color class (ping-fast/ping-mid/ping-slow) for the same key, re-applied on
+// every render so a re-render doesn't wipe the latency color.
+const pingClasses: Record<string, string> = {};
 
 // Live ping-result <span> per server key, rebuilt on every render so an
 // in-flight Ping resolves into the currently-mounted element instead of a
@@ -203,22 +206,35 @@ function render(st: State) {
     const ping = document.createElement("button");
     ping.textContent = "Пинг";
     const result = document.createElement("span");
-    result.className = "ping-result";
+    result.className = "ping-result " + (pingClasses[key] ?? "");
     result.textContent = pingResults[key] ?? "";
     pingEls[key] = result;
     ping.onclick = () => {
       pingResults[key] = "…";
+      pingClasses[key] = "";
+      result.className = "ping-result";
       result.textContent = "…";
-      const apply = (text: string) => {
+      const apply = (text: string, cls: string) => {
         pingResults[key] = text;
+        pingClasses[key] = cls;
         // Resolve into the currently-mounted span, which may differ from
         // `result` if a re-render happened while the Ping was in flight.
         const el = pingEls[key];
-        if (el) el.textContent = text;
+        if (el) {
+          el.textContent = text;
+          el.className = "ping-result " + cls;
+        }
       };
       Ping(i)
-        .then((r) => apply(r.ok ? `${r.latencyMs} мс` : r.error || "ошибка"))
-        .catch(() => apply("ошибка"));
+        .then((r) => {
+          if (!r.ok) {
+            apply(r.error || "ошибка", "ping-slow");
+            return;
+          }
+          const cls = r.latencyMs < 150 ? "ping-fast" : r.latencyMs <= 400 ? "ping-mid" : "ping-slow";
+          apply(`${r.latencyMs} мс`, cls);
+        })
+        .catch(() => apply("ошибка", "ping-slow"));
     };
     li.append(label, pick, del, ping, result);
     list.append(li);
