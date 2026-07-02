@@ -88,10 +88,10 @@
           </label>
           <p id="routing-hint" class="hint"></p>
           <div id="whitelist-only">
-            <label><input type="checkbox" id="tg-toggle" /> Telegram → VPN</label>
-            <span class="hint">Заворачивать Telegram в туннель.</span>
-            <div id="preset-list" class="preset-list"></div>
-            <span class="hint">Отмеченные сервисы идут через VPN. Если сервер пропускает только Telegram — оставьте всё выключенным.</span>
+            <div id="preset-list" class="preset-list">
+              <label><input type="checkbox" id="tg-toggle" class="toggle-switch" /> Telegram → VPN</label>
+            </div>
+            <span class="hint">Отмеченные сервисы идут через VPN. Telegram включён по умолчанию — если сервер пропускает только его, оставьте остальное выключенным.</span>
             <label class="col">
               <span class="label">Свои адреса через VPN</span>
               <textarea id="proxy-list" rows="4" spellcheck="false"
