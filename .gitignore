@@ -24,3 +24,6 @@ frontend/dist/
 
 # XTLS go-win7 toolchain (fetched by scripts/fetch-go-win7.sh)
 .go-win7/
+
+# Git worktrees for isolated subagent-driven-development work
+.worktrees/
