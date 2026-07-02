@@ -40,6 +40,7 @@ const PRESETS: { key: string; title: string }[] = [
   { key: "netflix", title: "Netflix" },
   { key: "spotify", title: "Spotify" },
   { key: "openai", title: "ChatGPT (OpenAI)" },
+  { key: "anthropic", title: "Claude (Anthropic)" },
 ];
 
 // Mirrors backend validation: bare IPv4/IPv6 or CIDR goes to the IP list,
@@ -403,16 +404,20 @@ function wire() {
   });
 
   // Preset checkboxes (built once; render() syncs the checked state).
+  // `data-preset` marks these (as opposed to #tg-toggle, which also lives
+  // inside #preset-list for layout but is NOT one of these — see below) so
+  // the change handler's query doesn't sweep up Telegram's checkbox.
   const presetBox = $("preset-list");
   PRESETS.forEach((p) => {
     const label = document.createElement("label");
     const cb = document.createElement("input");
     cb.type = "checkbox";
     cb.className = "toggle-switch";
+    cb.dataset.preset = "1";
     cb.value = p.key;
     cb.addEventListener("change", () => {
       current.profile.proxyPresets = Array.from(
-        document.querySelectorAll<HTMLInputElement>("#preset-list input:checked"),
+        document.querySelectorAll<HTMLInputElement>('#preset-list input[data-preset]:checked'),
       ).map((c) => c.value);
       pushProfile();
     });
