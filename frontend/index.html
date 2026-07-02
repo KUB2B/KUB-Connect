@@ -50,74 +50,84 @@
 
       <!-- НАСТРОЙКИ -->
       <section id="tab-settings" class="tab-panel hidden">
-        <h2>Серверы</h2>
-        <div class="row">
-          <input id="link-input" type="text" placeholder="vless://..." />
-          <button id="add-server-btn">Добавить</button>
-        </div>
-        <p id="link-error" class="error"></p>
-        <ul id="server-list"></ul>
+        <details id="section-servers" open>
+          <summary>Серверы</summary>
+          <div class="row">
+            <input id="link-input" type="text" placeholder="vless://..." />
+            <button id="add-server-btn">Добавить</button>
+          </div>
+          <p id="link-error" class="error"></p>
+          <ul id="server-list"></ul>
+        </details>
 
-        <h2>Подключение</h2>
-        <div class="row">
-          <select id="mode-select">
-            <option value="proxy">Proxy — без прав администратора</option>
-            <option value="tun">TUN — нужны права администратора</option>
-          </select>
-        </div>
-        <p id="connection-hint" class="hint"></p>
+        <details id="section-connection" open>
+          <summary>Подключение</summary>
+          <div class="row">
+            <select id="mode-select">
+              <option value="proxy">Proxy — без прав администратора</option>
+              <option value="tun">TUN — нужны права администратора</option>
+            </select>
+          </div>
+          <p id="connection-hint" class="hint"></p>
+        </details>
 
-        <h2>Что через VPN</h2>
-        <label class="row">
-          <span class="label">Режим</span>
-          <select id="routing-mode-select">
-            <option value="whitelist">Только выбранное</option>
-            <option value="full">Всё через VPN</option>
-          </select>
-        </label>
-        <p id="routing-hint" class="hint"></p>
-        <div id="whitelist-only">
-          <label><input type="checkbox" id="tg-toggle" /> Telegram → VPN</label>
-          <span class="hint">Заворачивать Telegram в туннель.</span>
-          <div id="preset-list" class="preset-list"></div>
-          <span class="hint">Отмеченные сервисы идут через VPN. Если сервер пропускает только Telegram — оставьте всё выключенным.</span>
-          <label class="col">
-            <span class="label">Свои адреса через VPN</span>
-            <textarea id="proxy-list" rows="4" spellcheck="false"
-              placeholder="youtube.com&#10;geosite:google&#10;1.2.3.4&#10;10.20.0.0/16"></textarea>
+        <details id="section-routing">
+          <summary>Что через VPN</summary>
+          <label class="row">
+            <span class="label">Режим</span>
+            <select id="routing-mode-select">
+              <option value="whitelist">Только выбранное</option>
+              <option value="full">Всё через VPN</option>
+            </select>
           </label>
-          <span class="hint">По одной записи в строке: домен, geosite:категория, IP или CIDR.</span>
-        </div>
-        <div id="full-only">
-          <label><input type="checkbox" id="ru-toggle" /> RU напрямую</label>
-          <span class="hint">Российские сайты (geoip:ru) — мимо VPN. Быстрее и без блокировок зарубежных сервисов.</span>
-        </div>
-        <label class="col">
-          <span class="label">Исключения — всегда мимо VPN</span>
-          <textarea id="direct-list" rows="3" spellcheck="false"
-            placeholder="sberbank.ru&#10;gosuslugi.ru&#10;77.88.8.8"></textarea>
-        </label>
-        <span class="hint">Домены и IP, которые никогда не заворачиваются в туннель (в обоих режимах).</span>
-        <p id="routing-error" class="error"></p>
-        <div id="kill-row">
-          <label><input type="checkbox" id="kill-toggle" /> Kill switch</label>
-          <span class="hint">Если VPN отвалится — блокировать трафик выбранных адресов, чтобы он не утёк напрямую.</span>
-        </div>
-        <label><input type="checkbox" id="mux-toggle" /> Mux (для Telegram — на сервере клиент без flow)</label>
+          <p id="routing-hint" class="hint"></p>
+          <div id="whitelist-only">
+            <label><input type="checkbox" id="tg-toggle" /> Telegram → VPN</label>
+            <span class="hint">Заворачивать Telegram в туннель.</span>
+            <div id="preset-list" class="preset-list"></div>
+            <span class="hint">Отмеченные сервисы идут через VPN. Если сервер пропускает только Telegram — оставьте всё выключенным.</span>
+            <label class="col">
+              <span class="label">Свои адреса через VPN</span>
+              <textarea id="proxy-list" rows="4" spellcheck="false"
+                placeholder="youtube.com&#10;geosite:google&#10;1.2.3.4&#10;10.20.0.0/16"></textarea>
+            </label>
+            <span class="hint">По одной записи в строке: домен, geosite:категория, IP или CIDR.</span>
+          </div>
+          <div id="full-only">
+            <label><input type="checkbox" id="ru-toggle" /> RU напрямую</label>
+            <span class="hint">Российские сайты (geoip:ru) — мимо VPN. Быстрее и без блокировок зарубежных сервисов.</span>
+          </div>
+          <label class="col">
+            <span class="label">Исключения — всегда мимо VPN</span>
+            <textarea id="direct-list" rows="3" spellcheck="false"
+              placeholder="sberbank.ru&#10;gosuslugi.ru&#10;77.88.8.8"></textarea>
+          </label>
+          <span class="hint">Домены и IP, которые никогда не заворачиваются в туннель (в обоих режимах).</span>
+          <p id="routing-error" class="error"></p>
+          <div id="kill-row">
+            <label><input type="checkbox" id="kill-toggle" /> Kill switch</label>
+            <span class="hint">Если VPN отвалится — блокировать трафик выбранных адресов, чтобы он не утёк напрямую.</span>
+          </div>
+          <label><input type="checkbox" id="mux-toggle" /> Mux (для Telegram — на сервере клиент без flow)</label>
+        </details>
 
-        <h2>Запуск</h2>
-        <label id="autostart-row"><input type="checkbox" id="autostart-toggle" /> Автозапуск при входе в систему</label>
-        <label><input type="checkbox" id="autoconnect-toggle" /> Автоподключение при старте</label>
+        <details id="section-startup" open>
+          <summary>Запуск</summary>
+          <label id="autostart-row"><input type="checkbox" id="autostart-toggle" /> Автозапуск при входе в систему</label>
+          <label><input type="checkbox" id="autoconnect-toggle" /> Автоподключение при старте</label>
+        </details>
 
-        <h2>Логи</h2>
-        <label class="row">
-          <span class="label">Уровень</span>
-          <select id="loglevel-select">
-            <option value="error">Тихо</option>
-            <option value="warning">Обычный</option>
-            <option value="debug">Подробно</option>
-          </select>
-        </label>
+        <details id="section-logs">
+          <summary>Логи</summary>
+          <label class="row">
+            <span class="label">Уровень</span>
+            <select id="loglevel-select">
+              <option value="error">Тихо</option>
+              <option value="warning">Обычный</option>
+              <option value="debug">Подробно</option>
+            </select>
+          </label>
+        </details>
       </section>
 
       <!-- ЛОГИ -->
