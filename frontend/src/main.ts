@@ -77,6 +77,21 @@ type State = {
 
 const $ = (id: string) => document.getElementById(id)!;
 
+// Error toast: shows text with the `.show` class (visible, boxed), auto-hides
+// after 5s or on click. Text stays in the DOM (for screen readers / debugging)
+// even while hidden; only the `.show` class controls visibility.
+const errorTimers = new WeakMap<HTMLElement, number>();
+function setError(el: HTMLElement, text: string) {
+  const existing = errorTimers.get(el);
+  if (existing) window.clearTimeout(existing);
+  el.textContent = text;
+  el.classList.toggle("show", !!text);
+  if (text) {
+    const timer = window.setTimeout(() => el.classList.remove("show"), 5000);
+    errorTimers.set(el, timer);
+  }
+}
+
 const STATUS: Record<string, string> = {
   connected: "Подключено",
   connecting: "Подключение…",
@@ -130,7 +145,7 @@ function render(st: State) {
   const btn = $("power-btn");
   btn.className = "power " + st.conn;
   $("status-text").textContent = STATUS[st.conn] ?? st.conn;
-  $("error-line").textContent = st.lastError || "";
+  setError($("error-line"), st.lastError || "");
 
   // Active-server selector on Главная.
   const sel = <HTMLSelectElement>$("server-select");
@@ -260,10 +275,18 @@ function appendLog(line: string) {
 }
 
 function pushSettings() {
-  UpdateSettings(current.settings).catch((e) => ($("error-line").textContent = String(e)));
+  UpdateSettings(current.settings).catch((e) => setError($("error-line"), String(e)));
 }
 
 function wire() {
+  // Error toasts: click anywhere on a shown `.error` to dismiss early.
+  document.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement;
+    if (target.classList.contains("error") && target.classList.contains("show")) {
+      target.classList.remove("show");
+    }
+  });
+
   // Tabs
   document.querySelectorAll<HTMLElement>(".tab").forEach((b) => {
     b.addEventListener("click", () => setTab(b.dataset.tab!));
@@ -278,7 +301,7 @@ function wire() {
   $("power-btn").addEventListener("click", () => {
     const c = current?.conn;
     if (c === "connected") {
-      Disconnect().catch((e) => ($("error-line").textContent = String(e)));
+      Disconnect().catch((e) => setError($("error-line"), String(e)));
     } else if (c === "disconnected" || c === "error") {
       // TUN needs admin. If unelevated, offer restart-with-admin instead of a
       // doomed Connect that the backend would reject.
@@ -291,7 +314,7 @@ function wire() {
         $("elevate-modal").classList.remove("hidden");
         return;
       }
-      Connect().catch((e) => ($("error-line").textContent = String(e)));
+      Connect().catch((e) => setError($("error-line"), String(e)));
     }
     // connecting/disconnecting: ignore.
   });
@@ -309,9 +332,9 @@ function wire() {
     AddServer(input.value)
       .then(() => {
         input.value = "";
-        $("link-error").textContent = "";
+        setError($("link-error"), "");
       })
-      .catch((e) => ($("link-error").textContent = String(e)))
+      .catch((e) => setError($("link-error"), String(e)))
       .finally(() => {
         btn.disabled = false;
       });
@@ -319,8 +342,8 @@ function wire() {
 
   const pushProfile = () => {
     UpdateProfile(current.profile)
-      .then(() => ($("routing-error").textContent = ""))
-      .catch((e) => ($("routing-error").textContent = String(e)));
+      .then(() => setError($("routing-error"), ""))
+      .catch((e) => setError($("routing-error"), String(e)));
   };
 
   $("tg-toggle").addEventListener("change", () => {
@@ -379,7 +402,7 @@ function wire() {
       current.profile.full = prev;
       (<HTMLSelectElement>$("routing-mode-select")).value = prev ? "full" : "whitelist";
       $("whitelist-only").classList.toggle("hidden", prev);
-      $("error-line").textContent = String(e);
+      setError($("error-line"), String(e));
     });
   });
   $("mode-select").addEventListener("change", () => {
@@ -407,7 +430,7 @@ function wire() {
     UpdateSettings(current.settings).catch((e) => {
       current.settings.autoStart = prev;
       cb.checked = prev;
-      $("error-line").textContent = String(e);
+      setError($("error-line"), String(e));
     });
   });
   $("autoconnect-toggle").addEventListener("change", () => {
@@ -417,7 +440,7 @@ function wire() {
     UpdateSettings(current.settings).catch((e) => {
       current.settings.autoConnect = prev;
       cb.checked = prev;
-      $("error-line").textContent = String(e);
+      setError($("error-line"), String(e));
     });
   });
   $("loglevel-select").addEventListener("change", () => {
@@ -470,7 +493,7 @@ function wire() {
   $("elevate-restart").addEventListener("click", () => {
     RelaunchElevated(elevateForConnect).catch((e) => {
       closeElevate(!elevateForConnect);
-      $("error-line").textContent = String(e);
+      setError($("error-line"), String(e));
     });
   });
   $("elevate-cancel").addEventListener("click", () => closeElevate(!elevateForConnect));
@@ -508,7 +531,7 @@ function checkUpdate() {
         // UAC declined / network / no asset — restore the banner with a note.
         $("update-progress-wrap").classList.add("hidden");
         $("update-text").classList.remove("hidden");
-        $("error-line").textContent = "Обновление не удалось: " + String(err);
+        setError($("error-line"), "Обновление не удалось: " + String(err));
       });
     };
 
