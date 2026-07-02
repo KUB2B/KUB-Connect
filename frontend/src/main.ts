@@ -309,7 +309,23 @@ function pushSettings() {
   UpdateSettings(current.settings).catch((e) => setError($("error-line"), String(e)));
 }
 
+const ADVANCED_MODE_KEY = "ui.advanced";
+
+function applyAdvancedMode(advanced: boolean) {
+  $("tab-settings").classList.toggle("simple-mode", !advanced);
+}
+
 function wire() {
+  // Simple/advanced settings mode — a UI-only preference, not sent to the backend.
+  const advancedToggle = <HTMLInputElement>$("advanced-toggle");
+  const storedAdvanced = localStorage.getItem(ADVANCED_MODE_KEY) === "1";
+  advancedToggle.checked = storedAdvanced;
+  applyAdvancedMode(storedAdvanced);
+  advancedToggle.addEventListener("change", () => {
+    localStorage.setItem(ADVANCED_MODE_KEY, advancedToggle.checked ? "1" : "0");
+    applyAdvancedMode(advancedToggle.checked);
+  });
+
   // Error toasts: click anywhere on a shown `.error` to dismiss early.
   document.addEventListener("click", (e) => {
     const target = e.target as HTMLElement;

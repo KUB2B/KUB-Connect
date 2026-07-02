@@ -50,6 +50,12 @@
 
       <!-- НАСТРОЙКИ -->
       <section id="tab-settings" class="tab-panel hidden">
+        <div class="row mode-toggle-row">
+          <label class="mode-switch">
+            <input type="checkbox" id="advanced-toggle" class="toggle-switch" />
+            <span>Расширенный режим</span>
+          </label>
+        </div>
         <details id="section-servers" open>
           <summary>Серверы</summary>
           <div class="row">
@@ -71,7 +77,7 @@
           <p id="connection-hint" class="hint"></p>
         </details>
 
-        <details id="section-routing">
+        <details id="section-routing" data-advanced>
           <summary>Что через VPN</summary>
           <label class="row">
             <span class="label">Режим</span>
@@ -117,7 +123,7 @@
           <label><input type="checkbox" id="autoconnect-toggle" /> Автоподключение при старте</label>
         </details>
 
-        <details id="section-logs">
+        <details id="section-logs" data-advanced>
           <summary>Логи</summary>
           <label class="row">
             <span class="label">Уровень</span>
