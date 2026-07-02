@@ -57,6 +57,7 @@ var Presets = []Preset{
 	{Key: "netflix", Title: "Netflix", Domains: []string{"geosite:netflix"}},
 	{Key: "spotify", Title: "Spotify", Domains: []string{"geosite:spotify"}},
 	{Key: "openai", Title: "ChatGPT (OpenAI)", Domains: []string{"geosite:openai"}},
+	{Key: "anthropic", Title: "Claude (Anthropic)", Domains: []string{"geosite:anthropic"}},
 }
 
 // PresetByKey returns the preset with the given key, or false.

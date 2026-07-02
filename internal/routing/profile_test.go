@@ -160,3 +160,16 @@ func TestFullRulesDirectExceptionsFirst(t *testing.T) {
 		t.Errorf("catch-all = %+v, want proxy", last)
 	}
 }
+
+func TestPresetByKey_Anthropic(t *testing.T) {
+	p, ok := PresetByKey("anthropic")
+	if !ok {
+		t.Fatal("expected \"anthropic\" preset to exist")
+	}
+	if p.Title != "Claude (Anthropic)" {
+		t.Errorf("Title = %q, want %q", p.Title, "Claude (Anthropic)")
+	}
+	if len(p.Domains) != 1 || p.Domains[0] != "geosite:anthropic" {
+		t.Errorf("Domains = %v, want [\"geosite:anthropic\"]", p.Domains)
+	}
+}
