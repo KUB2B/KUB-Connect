@@ -222,6 +222,15 @@ func (a *App) RelaunchElevated(connectAfter bool) error {
 		if err := a.svc.Persist(); err != nil {
 			log.Printf("persist before elevate: %v", err)
 		}
+		// Tear down the TUN adapter now, not in shutdown() after the new
+		// process is already spawned: the elevated instance's own single-
+		// instance mutex check and TUN init otherwise race this process's
+		// (async, message-loop-gated) teardown and can lose — the new
+		// instance then sees the mutex still held and silently exits before
+		// OnStartup ever runs. Disconnect is idempotent.
+		if err := a.svc.Disconnect(); err != nil {
+			log.Printf("disconnect before elevate: %v", err)
+		}
 	}
 	if err := privilege.RelaunchElevated(); err != nil {
 		if a.svc != nil {
