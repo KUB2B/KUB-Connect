@@ -64,6 +64,7 @@ input[type="text"], select {
   color: var(--text); border-radius: 6px;
 }
 input[type="text"] { flex: 1; }
+input.onboard-hint { outline: 2px solid var(--accent); outline-offset: 1px; }
 button {
   padding: 0.45rem 0.8rem; background: var(--surface-2); color: var(--text);
   border: 1px solid var(--border); border-radius: 6px; cursor: pointer;

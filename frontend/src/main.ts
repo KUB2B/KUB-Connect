@@ -102,6 +102,19 @@ const STATUS: Record<string, string> = {
 
 let current: State;
 
+// Shown once per app session the first time we see an empty server list —
+// steers a fresh install straight to where a link needs to be pasted.
+let onboardingShown = false;
+function maybeShowOnboarding(st: State) {
+  if (st.servers.length !== 0 || onboardingShown) return;
+  onboardingShown = true;
+  setTab("settings");
+  const input = <HTMLInputElement>$("link-input");
+  input.focus();
+  input.classList.add("onboard-hint");
+  input.addEventListener("input", () => input.classList.remove("onboard-hint"), { once: true });
+}
+
 // Ephemeral ping results, keyed by `${host}:${port}` so they survive re-renders
 // and index shifts when a server is removed.
 const pingResults: Record<string, string> = {};
@@ -141,6 +154,8 @@ function setListArea(id: string, ...lists: (string[] | null | undefined)[]) {
 }
 
 function render(st: State) {
+  maybeShowOnboarding(st);
+
   // Power button: color from conn state.
   const btn = $("power-btn");
   btn.className = "power " + st.conn;
