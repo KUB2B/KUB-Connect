@@ -338,6 +338,7 @@ function wire() {
     const label = document.createElement("label");
     const cb = document.createElement("input");
     cb.type = "checkbox";
+    cb.className = "toggle-switch";
     cb.value = p.key;
     cb.addEventListener("change", () => {
       current.profile.proxyPresets = Array.from(

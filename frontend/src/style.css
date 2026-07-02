@@ -154,7 +154,21 @@ label { display: block; margin: 0.4rem 0; }
   display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 0.15rem 0.75rem; margin: 0.4rem 0 0.15rem;
 }
-.preset-list label { font-size: 0.9rem; }
+.preset-list label { font-size: 0.9rem; display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
+.toggle-switch {
+  appearance: none; -webkit-appearance: none;
+  width: 34px; height: 20px; border-radius: 10px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  position: relative; cursor: pointer; flex: none;
+  transition: background 0.2s;
+}
+.toggle-switch::before {
+  content: ""; position: absolute; top: 1px; left: 1px;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--muted); transition: transform 0.2s, background 0.2s;
+}
+.toggle-switch:checked { background: var(--accent-dim); border-color: var(--accent-dim); }
+.toggle-switch:checked::before { transform: translateX(14px); background: #fff; }
 .col { display: block; margin: 0.5rem 0 0.15rem; }
 .col .label { display: block; margin-bottom: 0.25rem; }
 textarea {
