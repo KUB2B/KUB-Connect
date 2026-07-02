@@ -115,7 +115,15 @@ label { display: block; margin: 0.4rem 0; }
 .modal-btn { width: 100%; padding: 0.55rem; }
 .modal-btn.primary { background: var(--accent-dim); border-color: var(--accent-dim); color: #fff; }
 .modal-btn.primary:hover { background: var(--accent); }
-.modal-btn.danger { color: var(--error); }
+.modal-btn.danger {
+  color: var(--error);
+  background: none;
+  border: none;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  padding-top: 0.7rem;
+}
+.modal-btn.danger:hover { background: rgba(248, 113, 113, .08); }
 
 /* Update banner */
 .update-banner {
