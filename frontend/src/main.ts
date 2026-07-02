@@ -244,7 +244,7 @@ function render(st: State) {
   (<HTMLInputElement>$("tg-toggle")).checked = st.profile.telegram;
   (<HTMLInputElement>$("ru-toggle")).checked = st.profile.forceRUDirect;
   const selectedPresets = st.profile.proxyPresets ?? [];
-  document.querySelectorAll<HTMLInputElement>("#preset-list input").forEach((cb) => {
+  document.querySelectorAll<HTMLInputElement>("#preset-list input[data-preset]").forEach((cb) => {
     cb.checked = selectedPresets.includes(cb.value);
   });
   setListArea("proxy-list", st.profile.customProxyDomains, st.profile.customProxyIPs);
