@@ -77,6 +77,18 @@ func TestPickInstaller(t *testing.T) {
 	if _, ok := PickInstaller(Release{Assets: []Asset{{Name: "notes.txt"}}}, false); ok {
 		t.Error("PickInstaller: expected ok=false when no installer asset")
 	}
+
+	// Partial release with only the win7 asset (e.g. `make windows7` published
+	// without `make windows`): modern host must NOT fall back to it.
+	win7Only := Release{Assets: []Asset{
+		{Name: "kub-connect-v1.2.2-windows7-amd64-installer.exe", URL: "https://x/win7"},
+	}}
+	if _, ok := PickInstaller(win7Only, false); ok {
+		t.Error("PickInstaller(modern, win7-only release): expected ok=false, got a match")
+	}
+	if a, ok := PickInstaller(win7Only, true); !ok || a.URL != "https://x/win7" {
+		t.Errorf("PickInstaller(legacy, win7-only release) = %+v ok=%v, want win7 asset", a, ok)
+	}
 }
 
 func TestDownload(t *testing.T) {

@@ -44,11 +44,17 @@ func PickInstaller(rel Release, legacy bool) (Asset, bool) {
 			return a, true
 		}
 	}
-	// Fallback for releases that predate the per-OS split.
+	// Fallback for releases that predate the per-OS split. Still must not hand
+	// a modern host the windows7 asset if that's all a partial release has.
 	for _, a := range rel.Assets {
-		if strings.HasSuffix(strings.ToLower(a.Name), "-installer.exe") {
-			return a, true
+		name := strings.ToLower(a.Name)
+		if !strings.HasSuffix(name, "-installer.exe") {
+			continue
 		}
+		if !legacy && strings.Contains(name, "windows7") {
+			continue
+		}
+		return a, true
 	}
 	return Asset{}, false
 }
