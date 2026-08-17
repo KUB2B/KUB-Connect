@@ -52,9 +52,12 @@ func trayIcon() []byte {
 
 // App is the Wails-bound application object.
 type App struct {
-	ctx      context.Context
-	svc      *app.Service
-	trayStop func() // tears down the tray on shutdown
+	ctx          context.Context
+	svc          *app.Service
+	initErr      string
+	stateReady   chan struct{} // closed once persisted state has been loaded (or failed)
+	startupReady chan struct{} // closed once geo assets and startup actions are ready
+	trayStop     func()        // tears down the tray on shutdown
 	// quitting marks an intentional quit (tray "Выход" or the modal "Выйти") so
 	// beforeClose lets the close through instead of re-prompting. Wails routes
 	// runtime.Quit through OnBeforeClose, so without this flag an always-veto
@@ -63,14 +66,26 @@ type App struct {
 	quitting atomic.Bool
 }
 
-func NewApp() *App { return &App{} }
+func NewApp() *App {
+	return &App{
+		stateReady:   make(chan struct{}),
+		startupReady: make(chan struct{}),
+	}
+}
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	defer close(a.startupReady)
 
-	// Extract embedded geo databases and point xray-core at them, unless the
-	// environment already overrides the location (useful for dev).
-	if os.Getenv("XRAY_LOCATION_ASSET") == "" {
+	// Geo databases are comparatively large. Prepare them in parallel with
+	// loading state so the frontend can display saved servers immediately. Any
+	// operation that starts xray waits for startupReady below.
+	geoReady := make(chan struct{})
+	go func() {
+		defer close(geoReady)
+		if os.Getenv("XRAY_LOCATION_ASSET") != "" {
+			return
+		}
 		if dir, err := geoassets.DefaultDir(); err != nil {
 			log.Printf("geo asset dir: %v", err)
 		} else if err := geoassets.Sync(geoAssets, "data", dir, []string{"geoip.dat", "geosite.dat"}); err != nil {
@@ -78,7 +93,7 @@ func (a *App) startup(ctx context.Context) {
 		} else {
 			_ = os.Setenv("XRAY_LOCATION_ASSET", dir)
 		}
-	}
+	}()
 
 	statePath, err := store.DefaultPath()
 	if err != nil {
@@ -111,12 +126,20 @@ func (a *App) startup(ctx context.Context) {
 	})
 	if err != nil {
 		log.Printf("init service: %v", err)
+		a.initErr = err.Error()
+		close(a.stateReady)
+		<-geoReady
 		return
 	}
 	a.svc = svc
 	a.svc.SubscribeLogs(func(line string) {
 		wruntime.EventsEmit(a.ctx, "log", line)
 	})
+	// Publish the fully loaded state before waiting for geo asset extraction.
+	// Binding calls synchronize on this close, so they never observe svc == nil
+	// merely because Wails started the frontend and OnStartup concurrently.
+	close(a.stateReady)
+	<-geoReady
 	// A pending-connect intent (set before an elevated restart) takes priority
 	// over the normal AutoConnect setting; consume it once, else auto-connect.
 	if !a.svc.ResumePendingConnect() {
@@ -174,10 +197,11 @@ func (a *App) shutdown(ctx context.Context) {
 	if a.trayStop != nil {
 		a.trayStop()
 	}
-	if a.svc == nil {
+	svc, err := a.service()
+	if err != nil {
 		return
 	}
-	if err := a.svc.Disconnect(); err != nil {
+	if err := svc.Disconnect(); err != nil {
 		log.Printf("shutdown disconnect: %v", err)
 	}
 }
@@ -217,27 +241,20 @@ func (a *App) quit() {
 // instance auto-connects once on startup. Returns the error (e.g.
 // privilege.ErrElevationDeclined) so the frontend can revert.
 func (a *App) RelaunchElevated(connectAfter bool) error {
-	if a.svc != nil {
-		a.svc.SetPendingConnect(connectAfter)
-		if err := a.svc.Persist(); err != nil {
-			log.Printf("persist before elevate: %v", err)
-		}
-		// Tear down the TUN adapter now, not in shutdown() after the new
-		// process is already spawned: the elevated instance's own single-
-		// instance mutex check and TUN init otherwise race this process's
-		// (async, message-loop-gated) teardown and can lose — the new
-		// instance then sees the mutex still held and silently exits before
-		// OnStartup ever runs. Disconnect is idempotent.
-		if err := a.svc.Disconnect(); err != nil {
-			log.Printf("disconnect before elevate: %v", err)
+	svc, svcErr := a.service()
+	if svcErr == nil {
+		svc.SetPendingConnect(connectAfter)
+		if err := svc.Persist(); err != nil {
+			svc.SetPendingConnect(false)
+			return fmt.Errorf("сохранение перед перезапуском: %w", err)
 		}
 	}
 	if err := privilege.RelaunchElevated(); err != nil {
-		if a.svc != nil {
+		if svcErr == nil {
 			// Relaunch failed (e.g. UAC declined); this process keeps running, so
 			// clear the intent to avoid a spurious auto-connect on the next start.
-			a.svc.SetPendingConnect(false)
-			if err := a.svc.Persist(); err != nil {
+			svc.SetPendingConnect(false)
+			if err := svc.Persist(); err != nil {
 				log.Printf("clear pending-connect after declined elevation: %v", err)
 			}
 		}
@@ -257,6 +274,9 @@ type UpdateInfo struct {
 // CheckUpdate queries GitHub releases and reports whether a newer version is
 // available. Safe to call concurrently; network errors return Available=false.
 func (a *App) CheckUpdate() UpdateInfo {
+	if runtime.GOOS != "windows" {
+		return UpdateInfo{}
+	}
 	rel, err := updater.CheckLatest()
 	if err != nil {
 		return UpdateInfo{}
@@ -274,6 +294,9 @@ func (a *App) CheckUpdate() UpdateInfo {
 // error (without quitting) if no installer asset exists, the download fails, or
 // the user declines UAC, so the frontend can restore the banner.
 func (a *App) DownloadAndInstall() error {
+	if runtime.GOOS != "windows" {
+		return fmt.Errorf("встроенное обновление поддерживается только на Windows")
+	}
 	rel, err := updater.CheckLatest()
 	if err != nil {
 		return fmt.Errorf("проверка обновления: %w", err)
@@ -302,35 +325,109 @@ func (a *App) DownloadAndInstall() error {
 }
 
 func (a *App) GetState() app.StateDTO {
-	if a.svc == nil {
-		return app.StateDTO{}
+	svc, err := a.service()
+	if err != nil {
+		msg := a.initErr
+		if msg == "" {
+			msg = "сервис не готов"
+		}
+		return app.StateDTO{
+			Servers:      []app.ServerDTO{},
+			ActiveServer: -1,
+			Settings:     app.SettingsDTO{Mode: string(store.ModeProxy), LogLevel: store.LogNormal},
+			Conn:         string(app.ConnError),
+			LastError:    "Ошибка инициализации: " + msg,
+			Caps:         app.CapsDTO{OS: runtime.GOOS, Version: version},
+		}
 	}
-	return a.svc.GetState()
+	return svc.GetState()
 }
-func (a *App) AddServer(link string) error          { return a.svc.AddServer(link) }
-func (a *App) RemoveServer(index int) error         { return a.svc.RemoveServer(index) }
-func (a *App) SetActiveServer(index int) error      { return a.svc.SetActiveServer(index) }
-func (a *App) UpdateProfile(p app.ProfileDTO) error { return a.svc.UpdateProfile(p) }
+
+// service waits until persisted state has been loaded. Wails invokes OnStartup
+// concurrently with frontend JavaScript, so a direct nil check here would turn
+// normal startup latency into a false empty/error state.
+func (a *App) service() (*app.Service, error) {
+	<-a.stateReady
+	if a.svc != nil {
+		return a.svc, nil
+	}
+	if a.initErr != "" {
+		return nil, fmt.Errorf("сервис не готов: %s", a.initErr)
+	}
+	return nil, fmt.Errorf("сервис не готов")
+}
+
+func (a *App) AddServer(link string) error {
+	svc, err := a.service()
+	if err != nil {
+		return err
+	}
+	return svc.AddServer(link)
+}
+func (a *App) RemoveServer(index int) error {
+	svc, err := a.service()
+	if err != nil {
+		return err
+	}
+	return svc.RemoveServer(index)
+}
+func (a *App) SetActiveServer(index int) error {
+	svc, err := a.service()
+	if err != nil {
+		return err
+	}
+	return svc.SetActiveServer(index)
+}
+func (a *App) UpdateProfile(p app.ProfileDTO) error {
+	svc, err := a.service()
+	if err != nil {
+		return err
+	}
+	return svc.UpdateProfile(p)
+}
 func (a *App) Presets() []app.PresetDTO {
-	if a.svc == nil {
+	svc, err := a.service()
+	if err != nil {
 		return nil
 	}
-	return a.svc.Presets()
+	return svc.Presets()
 }
-func (a *App) UpdateSettings(s app.SettingsDTO) error { return a.svc.UpdateSettings(s) }
-func (a *App) Connect() error                         { return a.svc.Connect() }
-func (a *App) Disconnect() error                      { return a.svc.Disconnect() }
+func (a *App) UpdateSettings(s app.SettingsDTO) error {
+	svc, err := a.service()
+	if err != nil {
+		return err
+	}
+	return svc.UpdateSettings(s)
+}
+func (a *App) Connect() error {
+	// xray needs the geo databases prepared by the remainder of startup.
+	<-a.startupReady
+	svc, err := a.service()
+	if err != nil {
+		return err
+	}
+	return svc.Connect()
+}
+func (a *App) Disconnect() error {
+	svc, err := a.service()
+	if err != nil {
+		return err
+	}
+	return svc.Disconnect()
+}
 func (a *App) Logs() []string {
-	if a.svc == nil {
+	svc, err := a.service()
+	if err != nil {
 		return nil
 	}
-	return a.svc.Logs()
+	return svc.Logs()
 }
 
 // Ping measures TCP connect latency to the server at index. Bound to the frontend.
 func (a *App) Ping(index int) app.PingResultDTO {
-	if a.svc == nil {
-		return app.PingResultDTO{Error: "сервис не готов"}
+	svc, err := a.service()
+	if err != nil {
+		return app.PingResultDTO{Error: err.Error()}
 	}
-	return a.svc.Ping(index)
+	return svc.Ping(index)
 }

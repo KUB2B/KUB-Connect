@@ -3,11 +3,13 @@
 package privilege
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -41,7 +43,7 @@ func RelaunchElevated() error {
 	dir, _ := syscall.UTF16PtrFromString(filepath.Dir(exe))
 
 	var paramsPtr *uint16
-	if params := joinArgs(os.Args[1:]); params != "" {
+	if params := joinArgs(relaunchArgs(os.Args[1:], os.Getpid())); params != "" {
 		paramsPtr, _ = syscall.UTF16PtrFromString(params)
 	}
 
@@ -61,6 +63,39 @@ func RelaunchElevated() error {
 			return ErrElevationDeclined
 		}
 		return fmt.Errorf("ShellExecuteW failed (code %d)", ret)
+	}
+	return nil
+}
+
+// WaitForRelaunchParent runs in the newly elevated process before wails.Run.
+// Waiting here is essential: Wails acquires its single-instance mutex before
+// OnStartup, so a child that starts immediately is otherwise mistaken for an
+// ordinary second launch and exits while the old process is still quitting.
+func WaitForRelaunchParent() error {
+	pid, args, err := takeRelaunchParent(os.Args[1:])
+	if err != nil {
+		return err
+	}
+	os.Args = append([]string{os.Args[0]}, args...)
+	if pid == 0 {
+		return nil
+	}
+	h, err := windows.OpenProcess(windows.SYNCHRONIZE, false, uint32(pid))
+	if err != nil {
+		// The parent may have exited between ShellExecuteW and OpenProcess.
+		if errors.Is(err, windows.ERROR_INVALID_PARAMETER) {
+			return nil
+		}
+		return fmt.Errorf("open elevation parent %d: %w", pid, err)
+	}
+	defer windows.CloseHandle(h)
+	const maxParentShutdown = 60 * time.Second
+	status, err := windows.WaitForSingleObject(h, uint32(maxParentShutdown/time.Millisecond))
+	if err != nil {
+		return fmt.Errorf("wait for elevation parent %d: %w", pid, err)
+	}
+	if status == uint32(windows.WAIT_TIMEOUT) {
+		return fmt.Errorf("timed out waiting for elevation parent %d", pid)
 	}
 	return nil
 }

@@ -4,10 +4,12 @@ package main
 
 import (
 	"embed"
+	"log"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/zki/vless-client/internal/privilege"
 )
 
 //go:embed all:frontend/dist
@@ -20,6 +22,12 @@ var assets embed.FS
 var geoAssets embed.FS
 
 func main() {
+	// An elevated relaunch is created while the old process still owns Wails'
+	// single-instance mutex. Wait for that owner before wails.Run performs its
+	// own lock check, otherwise the confirmed UAC launch silently exits.
+	if err := privilege.WaitForRelaunchParent(); err != nil {
+		log.Printf("elevated relaunch wait: %v", err)
+	}
 	a := NewApp()
 	err := wails.Run(&options.App{
 		Title:  "KUB Connect",
