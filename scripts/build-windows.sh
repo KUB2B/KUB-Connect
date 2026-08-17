@@ -8,6 +8,26 @@ VER="${VER:-$(git describe --tags --always)}"
 OUT="build/release"
 mkdir -p "$OUT"
 
+# Wails takes the executable and NSIS metadata exclusively from wails.json;
+# Go ldflags only affect the version shown inside the app. Keep all three in
+# sync for release builds without leaving a modified project file behind.
+VERSION_WITHOUT_V="${VER#v}"
+if [[ ! "${VERSION_WITHOUT_V}" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
+  echo "VER must start with a semantic version (for example v1.3.1), got: ${VER}" >&2
+  exit 1
+fi
+PRODUCT_VERSION="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
+WAILS_CONFIG_BACKUP="$(mktemp)"
+cp wails.json "${WAILS_CONFIG_BACKUP}"
+restore_wails_config() {
+  cp "${WAILS_CONFIG_BACKUP}" wails.json
+  rm -f "${WAILS_CONFIG_BACKUP}"
+}
+trap restore_wails_config EXIT
+sed -i -E \
+  's/("productVersion"[[:space:]]*:[[:space:]]*)"[^"]*"/\1"'"${PRODUCT_VERSION}"'"/' \
+  wails.json
+
 # WIN7=1 builds the separate Windows 7 artifact with the XTLS go-win7 toolchain
 # (official Go 1.21+ binaries crash on Win7). Everything else — NSIS, WebView2
 # macro, wintun, app code — is identical to the mainline Windows build.
