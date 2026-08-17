@@ -1,28 +1,28 @@
 import "./style.css";
 import {
-  GetState,
   AddServer,
+  CheckUpdate,
+  Connect,
+  Disconnect,
+  DownloadAndInstall,
+  GetState,
+  HideToTray,
+  Logs,
+  Ping,
+  Presets,
+  QuitApp,
+  RelaunchElevated,
   RemoveServer,
   SetActiveServer,
   UpdateProfile,
   UpdateSettings,
-  Connect,
-  Disconnect,
-  Logs,
-  HideToTray,
-  QuitApp,
-  RelaunchElevated,
-  CheckUpdate,
-  DownloadAndInstall,
-  Ping,
 } from "../wailsjs/go/main/App";
-import { EventsOn, BrowserOpenURL } from "../wailsjs/runtime";
+import { BrowserOpenURL, EventsOn } from "../wailsjs/runtime";
 
 type Profile = {
   full: boolean;
   telegram: boolean;
   forceRUDirect: boolean;
-  // Go nil slices arrive as null at runtime; readers use `?? []`.
   customProxyDomains: string[];
   customProxyIPs: string[];
   proxyPresets: string[];
@@ -30,25 +30,6 @@ type Profile = {
   customDirectIPs: string[];
 };
 
-// Keep in sync with routing.Presets (internal/routing/profile.go).
-const PRESETS: { key: string; title: string }[] = [
-  { key: "youtube", title: "YouTube" },
-  { key: "instagram", title: "Instagram" },
-  { key: "facebook", title: "Facebook" },
-  { key: "twitter", title: "Twitter / X" },
-  { key: "discord", title: "Discord" },
-  { key: "netflix", title: "Netflix" },
-  { key: "spotify", title: "Spotify" },
-  { key: "openai", title: "ChatGPT (OpenAI)" },
-  { key: "anthropic", title: "Claude (Anthropic)" },
-];
-
-// Mirrors backend validation: bare IPv4/IPv6 or CIDR goes to the IP list,
-// everything else is treated as a domain rule (geosite: prefixes contain
-// non-hex letters, so they never match the IPv6 branch).
-const looksLikeIP = (s: string) =>
-  /^\d{1,3}(\.\d{1,3}){3}(\/\d{1,2})?$/.test(s) ||
-  (s.includes(":") && /^[0-9a-fA-F:]+(\/\d{1,3})?$/.test(s));
 type Settings = {
   mode: string;
   autoConnect: boolean;
@@ -57,6 +38,7 @@ type Settings = {
   mux: boolean;
   logLevel: string;
 };
+
 type Server = { name: string; host: string; port: number; security: string; network: string };
 type Caps = {
   os: string;
@@ -75,21 +57,60 @@ type State = {
   lastError: string;
   caps: Caps;
 };
+type Preset = { key: string; title: string };
 
-const $ = (id: string) => document.getElementById(id)!;
+const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+const cloneSettings = (s: Settings): Settings => ({ ...s });
+const cloneProfile = (p: Profile): Profile => ({
+  ...p,
+  customProxyDomains: [...(p.customProxyDomains ?? [])],
+  customProxyIPs: [...(p.customProxyIPs ?? [])],
+  proxyPresets: [...(p.proxyPresets ?? [])],
+  customDirectDomains: [...(p.customDirectDomains ?? [])],
+  customDirectIPs: [...(p.customDirectIPs ?? [])],
+});
 
-// Error toast: shows text with the `.show` class (visible, boxed), auto-hides
-// after 5s or on click. Text stays in the DOM (for screen readers / debugging)
-// even while hidden; only the `.show` class controls visibility.
+function normalizeState(raw: State): State {
+  raw.servers ??= [];
+  raw.profile.customProxyDomains ??= [];
+  raw.profile.customProxyIPs ??= [];
+  raw.profile.proxyPresets ??= [];
+  raw.profile.customDirectDomains ??= [];
+  raw.profile.customDirectIPs ??= [];
+  return raw;
+}
+
+function errorText(error: unknown): string {
+  const text = error instanceof Error ? error.message : String(error ?? "Неизвестная ошибка");
+  return text.replace(/^(?:Error:\s*)+/i, "");
+}
+
 const errorTimers = new WeakMap<HTMLElement, number>();
-function setError(el: HTMLElement, text: string) {
-  const existing = errorTimers.get(el);
-  if (existing) window.clearTimeout(existing);
+function setError(el: HTMLElement, text: string, timeout = 6500) {
+  const previous = errorTimers.get(el);
+  if (previous) window.clearTimeout(previous);
+  if (el.textContent === text && el.classList.contains("show")) return;
   el.textContent = text;
-  el.classList.toggle("show", !!text);
-  if (text) {
-    const timer = window.setTimeout(() => el.classList.remove("show"), 5000);
+  el.classList.toggle("show", Boolean(text));
+  if (text && timeout > 0) {
+    const timer = window.setTimeout(() => el.classList.remove("show"), timeout);
     errorTimers.set(el, timer);
+  }
+}
+
+let transientGlobalError = "";
+let transientGlobalErrorTimer = 0;
+let dismissedBackendError = "";
+function showGlobalError(text: string, timeout = 6500) {
+  window.clearTimeout(transientGlobalErrorTimer);
+  transientGlobalError = text;
+  setError($("error-line"), text, 0);
+  if (timeout > 0) {
+    transientGlobalErrorTimer = window.setTimeout(() => {
+      if (transientGlobalError !== text) return;
+      transientGlobalError = "";
+      if (!current?.lastError) setError($("error-line"), "");
+    }, timeout);
   }
 }
 
@@ -97,504 +118,828 @@ const STATUS: Record<string, string> = {
   connected: "Подключено",
   connecting: "Подключение…",
   disconnecting: "Отключение…",
-  disconnected: "Отключено",
-  error: "Ошибка",
+  disconnected: "Не подключено",
+  error: "Ошибка подключения",
 };
 
-let current: State;
+const STATUS_DESCRIPTION: Record<string, string> = {
+  connected: "Соединение активно, правила маршрутизации применены",
+  connecting: "Запускаем защищённый туннель",
+  disconnecting: "Безопасно завершаем текущую сессию",
+  disconnected: "Нажмите кнопку, чтобы включить защиту",
+  error: "Проверьте сообщение ниже и повторите подключение",
+};
 
-// Shown once per app session the first time we see an empty server list —
-// steers a fresh install straight to where a link needs to be pasted.
-let onboardingShown = false;
-function maybeShowOnboarding(st: State) {
-  if (st.servers.length !== 0 || onboardingShown) return;
-  onboardingShown = true;
-  setTab("settings");
-  const input = <HTMLInputElement>$("link-input");
-  input.focus();
-  input.classList.add("onboard-hint");
-  input.addEventListener("input", () => input.classList.remove("onboard-hint"), { once: true });
-}
+let current: State | null = null;
+let backendState: State | null = null;
+let stateEventVersion = 0;
+let connectionActionPending = false;
 
-// Ephemeral ping results, keyed by `${host}:${port}` so they survive re-renders
-// and index shifts when a server is removed.
-const pingResults: Record<string, string> = {};
-// Color class (ping-fast/ping-mid/ping-slow) for the same key, re-applied on
-// every render so a re-render doesn't wipe the latency color.
-const pingClasses: Record<string, string> = {};
-
-// Live ping-result <span> per server key, rebuilt on every render so an
-// in-flight Ping resolves into the currently-mounted element instead of a
-// detached one when a `state` event re-renders the list mid-request.
-let pingEls: Record<string, HTMLElement> = {};
-
-function setTab(name: string) {
-  document.querySelectorAll<HTMLElement>(".tab").forEach((b) => {
-    b.classList.toggle("active", b.dataset.tab === name);
+function setTab(name: string, focus = false) {
+  const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>(".tab"));
+  tabs.forEach((button) => {
+    const active = button.dataset.tab === name;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+    button.tabIndex = active ? 0 : -1;
+    if (active && focus) button.focus();
   });
-  document.querySelectorAll<HTMLElement>(".tab-panel").forEach((p) => {
-    p.classList.toggle("hidden", p.id !== "tab-" + name);
+  document.querySelectorAll<HTMLElement>(".tab-panel").forEach((panel) => {
+    const active = panel.id === `tab-${name}`;
+    panel.classList.toggle("hidden", !active);
+    panel.hidden = !active;
   });
 }
 
 function connectionHint(mode: string): string {
   return mode === "tun"
-    ? "Перехватывает трафик сам, работает со всеми приложениями."
-    : "Трафик идёт через системный SOCKS. Telegram его игнорирует — для него выберите TUN.";
+    ? "Защищает трафик всех приложений. Нужны права администратора."
+    : "Использует системный прокси и не требует прав администратора.";
 }
 
 function routingHint(full: boolean): string {
   return full
-    ? "Весь трафик через туннель. Российские сайты можно оставить напрямую."
-    : "В VPN — Telegram, отмеченные сервисы и свои адреса. Остальное напрямую.";
+    ? "Весь трафик идёт через VPN, кроме заданных исключений."
+    : "Через VPN идут только выбранные сервисы и адреса.";
 }
 
-// setListArea fills a textarea from the split domain/IP lists, unless the user
-// is typing in it (a `state` re-render mid-edit must not clobber the draft).
 function setListArea(id: string, ...lists: (string[] | null | undefined)[]) {
-  const el = <HTMLTextAreaElement>$(id);
+  const el = $<HTMLTextAreaElement>(id);
   if (document.activeElement === el) return;
-  el.value = lists.flatMap((l) => l ?? []).join("\n");
+  el.value = lists.flatMap((list) => list ?? []).join("\n");
 }
 
-function render(st: State) {
-  maybeShowOnboarding(st);
+let onboardingShown = false;
+function maybeShowOnboarding(state: State) {
+  if (state.servers.length !== 0 || onboardingShown) return;
+  onboardingShown = true;
+  setTab("settings");
+  $("section-servers").setAttribute("open", "");
+  const input = $<HTMLInputElement>("link-input");
+  input.focus();
+  input.classList.add("onboard-hint");
+  input.addEventListener("input", () => input.classList.remove("onboard-hint"), { once: true });
+}
 
-  // Power button: color from conn state.
-  const btn = $("power-btn");
-  btn.className = "power " + st.conn;
-  $("status-text").textContent = STATUS[st.conn] ?? st.conn;
-  setError($("error-line"), st.lastError || "");
+const pingResults = new Map<string, { text: string; className: string }>();
+const pingElements = new Map<string, HTMLElement>();
 
-  // Active-server selector on Главная.
-  const sel = <HTMLSelectElement>$("server-select");
-  sel.innerHTML = "";
-  if (st.servers.length === 0) {
-    const opt = document.createElement("option");
-    opt.textContent = "Нет серверов — добавьте в Настройках";
-    opt.value = "-1";
-    sel.append(opt);
-    sel.disabled = true;
-  } else {
-    sel.disabled = false;
-    st.servers.forEach((s, i) => {
-      const opt = document.createElement("option");
-      opt.value = String(i);
-      opt.textContent = `${s.name} (${s.host}:${s.port})`;
-      sel.append(opt);
-    });
-    sel.value = String(st.activeServer);
-  }
+function serverSignature(server: Server): string {
+  return `${server.name}\u0000${server.host}\u0000${server.port}\u0000${server.security}\u0000${server.network}`;
+}
 
-  // Server list on Настройки.
+function serverKey(servers: Server[], index: number): string {
+  const signature = serverSignature(servers[index]);
+  const occurrence = servers.slice(0, index).filter((server) => serverSignature(server) === signature).length;
+  return `${signature}\u0000${occurrence}`;
+}
+
+function serverInitial(server: Server): string {
+  return (server.name || server.host || "S").trim().charAt(0).toUpperCase();
+}
+
+function renderServerList(state: State) {
   const list = $("server-list");
-  list.innerHTML = "";
-  pingEls = {};
-  st.servers.forEach((s, i) => {
-    const li = document.createElement("li");
-    li.className = i === st.activeServer ? "active" : "";
-    // textContent, not innerHTML: server name/host come from a user-pasted
-    // vless:// link and may contain markup or `&`/`<` characters.
-    const label = document.createElement("span");
-    label.textContent = `${s.name} (${s.host}:${s.port})`;
-    const pick = document.createElement("button");
-    pick.textContent = "Выбрать";
-    pick.onclick = () => SetActiveServer(i);
-    const del = document.createElement("button");
-    del.textContent = "Удалить";
-    del.onclick = () => RemoveServer(i);
-    const key = `${s.host}:${s.port}`;
-    const ping = document.createElement("button");
-    ping.textContent = "Пинг";
+  list.replaceChildren();
+  pingElements.clear();
+  if (state.servers.length === 0) {
+    const empty = document.createElement("li");
+    empty.className = "server-empty";
+    empty.textContent = "Серверов пока нет — вставьте VLESS-ссылку выше";
+    list.append(empty);
+    return;
+  }
+
+  state.servers.forEach((server, index) => {
+    const key = serverKey(state.servers, index);
+    const item = document.createElement("li");
+    item.className = `server-item${index === state.activeServer ? " active" : ""}`;
+
+    const info = document.createElement("div");
+    info.className = "server-info";
+    const avatar = document.createElement("span");
+    avatar.className = "server-avatar";
+    avatar.textContent = serverInitial(server);
+    const copy = document.createElement("span");
+    copy.className = "server-copy";
+    const title = document.createElement("strong");
+    title.textContent = server.name || "Без названия";
+    const address = document.createElement("small");
+    address.textContent = `${server.host}:${server.port} · ${server.security.toUpperCase()} / ${server.network.toUpperCase()}`;
+    copy.append(title, address);
+    info.append(avatar, copy);
+
     const result = document.createElement("span");
-    result.className = "ping-result " + (pingClasses[key] ?? "");
-    result.textContent = pingResults[key] ?? "";
-    pingEls[key] = result;
-    ping.onclick = () => {
-      pingResults[key] = "…";
-      pingClasses[key] = "";
-      result.className = "ping-result";
-      result.textContent = "…";
-      const apply = (text: string, cls: string) => {
-        pingResults[key] = text;
-        pingClasses[key] = cls;
-        // Resolve into the currently-mounted span, which may differ from
-        // `result` if a re-render happened while the Ping was in flight.
-        const el = pingEls[key];
-        if (el) {
-          el.textContent = text;
-          el.className = "ping-result " + cls;
+    const cachedPing = pingResults.get(key);
+    result.className = `ping-result ${cachedPing?.className ?? ""}`;
+    result.textContent = cachedPing?.text ?? "";
+    result.setAttribute("aria-live", "polite");
+    pingElements.set(key, result);
+
+    const actions = document.createElement("div");
+    actions.className = "server-actions";
+    let select: HTMLElement;
+    if (index === state.activeServer) {
+      select = document.createElement("span");
+      select.className = "server-active-label";
+      select.textContent = "Выбран";
+    } else {
+      const selectButton = document.createElement("button");
+      selectButton.type = "button";
+      selectButton.className = "button server-action";
+      selectButton.textContent = "Выбрать";
+      selectButton.addEventListener("click", () => void withBusy(selectButton, async () => {
+        try {
+          await SetActiveServer(index);
+        } catch (error) {
+          showGlobalError(`Не удалось выбрать сервер: ${errorText(error)}`);
         }
-      };
-      Ping(i)
-        .then((r) => {
-          if (!r.ok) {
-            apply(r.error || "ошибка", "ping-slow");
-            return;
-          }
-          const cls = r.latencyMs < 150 ? "ping-fast" : r.latencyMs <= 400 ? "ping-mid" : "ping-slow";
-          apply(`${r.latencyMs} мс`, cls);
-        })
-        .catch(() => apply("ошибка", "ping-slow"));
-    };
-    li.append(label, pick, del, ping, result);
-    list.append(li);
+      }));
+      select = selectButton;
+    }
+
+    const ping = document.createElement("button");
+    ping.type = "button";
+    ping.className = "button server-action";
+    ping.textContent = "Пинг";
+    ping.addEventListener("click", () => void withBusy(ping, async () => {
+      pingResults.set(key, { text: "…", className: "" });
+      result.textContent = "…";
+      try {
+        const response = await Ping(index);
+        const text = response.ok ? `${response.latencyMs} мс` : response.error || "ошибка";
+        const className = response.ok
+          ? response.latencyMs < 150 ? "ping-fast" : response.latencyMs <= 400 ? "ping-mid" : "ping-slow"
+          : "ping-slow";
+        pingResults.set(key, { text, className });
+        const mounted = pingElements.get(key);
+        if (mounted) {
+          mounted.textContent = text;
+          mounted.className = `ping-result ${className}`;
+        }
+      } catch (error) {
+        pingResults.set(key, { text: "ошибка", className: "ping-slow" });
+        const mounted = pingElements.get(key);
+        if (mounted) {
+          mounted.textContent = "ошибка";
+          mounted.className = "ping-result ping-slow";
+        }
+      }
+    }));
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "button server-action";
+    remove.textContent = "Удалить";
+    let removeArmed = false;
+    let removeTimer = 0;
+    remove.addEventListener("click", () => {
+      if (!removeArmed) {
+        removeArmed = true;
+        remove.textContent = "Точно?";
+        remove.classList.add("danger-confirm");
+        removeTimer = window.setTimeout(() => {
+          removeArmed = false;
+          remove.textContent = "Удалить";
+          remove.classList.remove("danger-confirm");
+        }, 3500);
+        return;
+      }
+      window.clearTimeout(removeTimer);
+      void withBusy(remove, async () => {
+        try {
+          await RemoveServer(index);
+          pingResults.delete(key);
+        } catch (error) {
+          removeArmed = false;
+          remove.textContent = "Удалить";
+          remove.classList.remove("danger-confirm");
+          showGlobalError(`Не удалось удалить сервер: ${errorText(error)}`);
+        }
+      });
+    });
+
+    actions.append(select, ping, remove);
+    item.append(info, result, actions);
+    list.append(item);
   });
-
-  (<HTMLInputElement>$("tg-toggle")).checked = st.profile.telegram;
-  (<HTMLInputElement>$("ru-toggle")).checked = st.profile.forceRUDirect;
-  const selectedPresets = st.profile.proxyPresets ?? [];
-  document.querySelectorAll<HTMLInputElement>("#preset-list input[data-preset]").forEach((cb) => {
-    cb.checked = selectedPresets.includes(cb.value);
-  });
-  setListArea("proxy-list", st.profile.customProxyDomains, st.profile.customProxyIPs);
-  setListArea("direct-list", st.profile.customDirectDomains, st.profile.customDirectIPs);
-  const routingSel = <HTMLSelectElement>$("routing-mode-select");
-  routingSel.value = st.profile.full ? "full" : "whitelist";
-  $("whitelist-only").classList.toggle("hidden", st.profile.full);
-  $("full-only").classList.toggle("hidden", !st.profile.full);
-  $("routing-hint").textContent = routingHint(st.profile.full);
-
-  (<HTMLSelectElement>$("mode-select")).value = st.settings.mode;
-  const modeSel = <HTMLSelectElement>$("mode-select");
-  const tunOpt = modeSel.querySelector<HTMLOptionElement>('option[value="tun"]');
-  if (tunOpt) {
-    tunOpt.disabled = !st.caps.tunSupported;
-    tunOpt.hidden = !st.caps.tunSupported;
-  }
-  if (!st.caps.tunSupported && modeSel.value === "tun") {
-    modeSel.value = "proxy";
-  }
-  $("connection-hint").textContent = connectionHint(modeSel.value);
-  $("app-version").textContent = st.caps.version;
-
-  const killToggle = <HTMLInputElement>$("kill-toggle");
-  killToggle.checked = st.settings.killSwitch;
-  // Kill switch only has an effect in TUN + whitelist on a supporting OS
-  // (tunnel.go gates on KillSwitch && !Full; firewall is Linux-only). Hide it
-  // everywhere else so no inert control is shown.
-  const killVisible =
-    modeSel.value === "tun" && st.caps.killSwitchSupported && !st.profile.full;
-  $("kill-row").classList.toggle("hidden", !killVisible);
-
-  (<HTMLInputElement>$("mux-toggle")).checked = st.settings.mux;
-  (<HTMLInputElement>$("autostart-toggle")).checked = st.settings.autoStart;
-  (<HTMLInputElement>$("autoconnect-toggle")).checked = st.settings.autoConnect;
-  $("autostart-row").classList.toggle("hidden", !st.caps.autostartSupported);
-  (<HTMLSelectElement>$("loglevel-select")).value = st.settings.logLevel || "warning";
 }
 
-function refresh() {
-  GetState().then((st) => {
-    current = st as State;
-    render(current);
+function render(state: State) {
+  const power = $<HTMLButtonElement>("power-btn");
+  power.className = `power ${state.conn}`;
+  power.disabled = connectionActionPending || state.conn === "connecting" || state.conn === "disconnecting";
+  power.setAttribute("aria-label", state.conn === "connected" ? "Отключиться" : "Подключиться");
+  $("status-text").textContent = STATUS[state.conn] ?? state.conn;
+  $("status-description").textContent = state.servers.length === 0
+    ? "Добавьте VLESS-сервер, чтобы начать"
+    : STATUS_DESCRIPTION[state.conn] ?? "Состояние соединения изменилось";
+  const badge = $("status-badge");
+  badge.className = `status-badge ${state.conn}`;
+  $("status-badge-text").textContent = STATUS[state.conn] ?? state.conn;
+  if (!state.lastError) dismissedBackendError = "";
+  if (state.lastError && state.lastError !== dismissedBackendError) setError($("error-line"), state.lastError, state.conn === "error" ? 0 : 6500);
+  else if (transientGlobalError) setError($("error-line"), transientGlobalError, 0);
+  else setError($("error-line"), "");
+
+  const serverSelect = $<HTMLSelectElement>("server-select");
+  serverSelect.replaceChildren();
+  if (state.servers.length === 0) {
+    serverSelect.append(new Option("Сначала добавьте сервер", "-1"));
+    serverSelect.disabled = true;
+  } else {
+    state.servers.forEach((server, index) => {
+      serverSelect.append(new Option(`${server.name || server.host} — ${server.host}:${server.port}`, String(index)));
+    });
+    serverSelect.value = String(state.activeServer);
+    serverSelect.disabled = false;
+  }
+
+  renderServerList(state);
+  $<HTMLInputElement>("tg-toggle").checked = state.profile.telegram;
+  $<HTMLInputElement>("ru-toggle").checked = state.profile.forceRUDirect;
+  document.querySelectorAll<HTMLInputElement>("#preset-list input[data-preset]").forEach((checkbox) => {
+    checkbox.checked = state.profile.proxyPresets.includes(checkbox.value);
+  });
+  setListArea("proxy-list", state.profile.customProxyDomains, state.profile.customProxyIPs);
+  setListArea("direct-list", state.profile.customDirectDomains, state.profile.customDirectIPs);
+
+  const routingSelect = $<HTMLSelectElement>("routing-mode-select");
+  routingSelect.value = state.profile.full ? "full" : "whitelist";
+  $("whitelist-only").classList.toggle("hidden", state.profile.full);
+  $("full-only").classList.toggle("hidden", !state.profile.full);
+  $("routing-hint").textContent = routingHint(state.profile.full);
+
+  const modeSelect = $<HTMLSelectElement>("mode-select");
+  modeSelect.value = state.settings.mode;
+  const tunOption = modeSelect.querySelector<HTMLOptionElement>('option[value="tun"]');
+  if (tunOption) {
+    tunOption.disabled = !state.caps.tunSupported;
+    tunOption.hidden = !state.caps.tunSupported;
+  }
+  $("connection-hint").textContent = connectionHint(modeSelect.value);
+  $<HTMLInputElement>("kill-toggle").checked = state.settings.killSwitch;
+  $("kill-row").classList.toggle("hidden", modeSelect.value !== "tun" || !state.caps.killSwitchSupported || state.profile.full);
+  $<HTMLInputElement>("mux-toggle").checked = state.settings.mux;
+  $<HTMLInputElement>("autostart-toggle").checked = state.settings.autoStart;
+  $<HTMLInputElement>("autoconnect-toggle").checked = state.settings.autoConnect;
+  $("autostart-row").classList.toggle("hidden", !state.caps.autostartSupported);
+  $<HTMLSelectElement>("loglevel-select").value = state.settings.logLevel || "warning";
+
+  $("home-mode").textContent = modeSelect.value === "tun" ? "TUN · вся система" : "Proxy · SOCKS5";
+  $("home-routing").textContent = state.profile.full ? "Весь трафик" : "Только выбранное";
+  const platform = ({ windows: "Windows", linux: "Linux", darwin: "macOS" } as Record<string, string>)[state.caps.os] ?? state.caps.os;
+  $("home-platform").textContent = `${platform}${state.caps.elevated ? " · Admin" : ""}`;
+  $("app-version").textContent = state.caps.version ? `Версия ${state.caps.version}` : "";
+  document.body.classList.remove("is-loading");
+  maybeShowOnboarding(state);
+}
+
+async function refresh() {
+  const versionBefore = stateEventVersion;
+  try {
+    const state = normalizeState(await GetState() as unknown as State);
+    if (stateEventVersion === versionBefore) applyBackendState(state);
+  } catch (error) {
+    document.body.classList.remove("is-loading");
+    showGlobalError(`Не удалось загрузить состояние: ${errorText(error)}`, 0);
+  }
+}
+
+let settingsQueue: Promise<void> = Promise.resolve();
+let profileQueue: Promise<void> = Promise.resolve();
+let pendingSettings = 0;
+let pendingProfiles = 0;
+let settingsRevision = 0;
+let profileRevision = 0;
+let desiredSettings: Settings | null = null;
+let desiredProfile: Profile | null = null;
+let saveStatusTimer = 0;
+
+function updateSaveStatus() {
+  const status = $("settings-save-status");
+  window.clearTimeout(saveStatusTimer);
+  if (pendingSettings + pendingProfiles > 0) {
+    status.textContent = "Сохраняем изменения…";
+    status.className = "save-status saving";
+    return;
+  }
+  status.textContent = current?.conn === "connected"
+    ? "Сохранено · применится при следующем подключении"
+    : "Сохранено";
+  status.className = "save-status saved";
+  saveStatusTimer = window.setTimeout(() => {
+    status.textContent = "";
+    status.className = "save-status";
+  }, 1800);
+}
+
+function commitSettings(next: Settings): Promise<boolean> {
+  if (!current) return Promise.resolve(false);
+  const revision = ++settingsRevision;
+  desiredSettings = cloneSettings(next);
+  current.settings = cloneSettings(next);
+  render(current);
+  pendingSettings++;
+  updateSaveStatus();
+
+  let result = false;
+  const task = settingsQueue.then(async () => {
+    try {
+      await UpdateSettings(next);
+      if (backendState) backendState.settings = cloneSettings(next);
+      result = true;
+    } catch (error) {
+      showGlobalError(`Не удалось сохранить настройки: ${errorText(error)}`);
+    }
+  });
+  settingsQueue = task.then(() => undefined);
+  return task.then(() => {
+    pendingSettings--;
+    if (revision === settingsRevision) {
+      desiredSettings = null;
+      if (backendState) current!.settings = cloneSettings(backendState.settings);
+      if (current) render(current);
+    }
+    updateSaveStatus();
+    return result;
   });
 }
 
-// Cap the in-memory log so a long-running session doesn't grow the DOM text
-// node without bound.
+function commitProfile(next: Profile): Promise<boolean> {
+  if (!current) return Promise.resolve(false);
+  const revision = ++profileRevision;
+  desiredProfile = cloneProfile(next);
+  current.profile = cloneProfile(next);
+  render(current);
+  pendingProfiles++;
+  updateSaveStatus();
+
+  let result = false;
+  const task = profileQueue.then(async () => {
+    try {
+      await UpdateProfile(next);
+      if (backendState) backendState.profile = cloneProfile(next);
+      result = true;
+      setError($("routing-error"), "");
+    } catch (error) {
+      setError($("routing-error"), errorText(error), 0);
+    }
+  });
+  profileQueue = task.then(() => undefined);
+  return task.then(() => {
+    pendingProfiles--;
+    if (revision === profileRevision) {
+      desiredProfile = null;
+      if (backendState) current!.profile = cloneProfile(backendState.profile);
+      if (current) render(current);
+    }
+    updateSaveStatus();
+    return result;
+  });
+}
+
+function applyBackendState(state: State) {
+  backendState = normalizeState(state);
+  current = normalizeState({
+    ...state,
+    servers: [...state.servers],
+    settings: desiredSettings ? cloneSettings(desiredSettings) : cloneSettings(state.settings),
+    profile: desiredProfile ? cloneProfile(desiredProfile) : cloneProfile(state.profile),
+  });
+  render(current);
+}
+
+async function withBusy(button: HTMLButtonElement, action: () => Promise<void>) {
+  if (button.disabled) return;
+  button.disabled = true;
+  button.classList.add("is-busy");
+  try {
+    await action();
+  } finally {
+    if (button.isConnected && button.dataset.keepDisabled !== "true") {
+      button.disabled = false;
+      button.classList.remove("is-busy");
+    }
+  }
+}
+
+// The initial Logs() snapshot and live EventsOn stream overlap. Buffer live
+// lines until the snapshot arrives and remove the common suffix/prefix so the
+// same line is not rendered twice.
 const MAX_LOG_LINES = 2000;
 const logLines: string[] = [];
+const bufferedLiveLogs: string[] = [];
+let logsReady = false;
+let logRenderPending = false;
 
-function appendLog(line: string) {
-  logLines.push(line);
-  if (logLines.length > MAX_LOG_LINES) {
-    logLines.splice(0, logLines.length - MAX_LOG_LINES);
-  }
+function trimLogs() {
+  if (logLines.length > MAX_LOG_LINES) logLines.splice(0, logLines.length - MAX_LOG_LINES);
+}
+
+function renderLogs(forceBottom = false) {
   const view = $("log-view");
-  view.textContent = logLines.join("\n") + "\n";
-  view.scrollTop = view.scrollHeight;
+  const nearBottom = view.scrollHeight - view.scrollTop - view.clientHeight < 40;
+  view.textContent = logLines.length ? `${logLines.join("\n")}\n` : "Здесь появятся события подключения";
+  view.classList.toggle("log-empty", logLines.length === 0);
+  if (forceBottom || nearBottom) view.scrollTop = view.scrollHeight;
 }
 
-function pushSettings() {
-  UpdateSettings(current.settings).catch((e) => setError($("error-line"), String(e)));
+function scheduleLogRender() {
+  if (logRenderPending) return;
+  logRenderPending = true;
+  window.requestAnimationFrame(() => {
+    logRenderPending = false;
+    renderLogs();
+  });
 }
 
-const ADVANCED_MODE_KEY = "ui.advanced";
-
-function applyAdvancedMode(advanced: boolean) {
-  $("tab-settings").classList.toggle("simple-mode", !advanced);
+function receiveLog(line: string) {
+  if (!logsReady) {
+    bufferedLiveLogs.push(line);
+    return;
+  }
+  logLines.push(line);
+  trimLogs();
+  scheduleLogRender();
 }
+
+async function loadInitialLogs() {
+  try {
+    const snapshot = await Logs() as string[] ?? [];
+    let overlap = Math.min(snapshot.length, bufferedLiveLogs.length);
+    while (overlap > 0) {
+      const suffix = snapshot.slice(snapshot.length - overlap);
+      const prefix = bufferedLiveLogs.slice(0, overlap);
+      if (suffix.every((line, index) => line === prefix[index])) break;
+      overlap--;
+    }
+    logLines.push(...snapshot, ...bufferedLiveLogs.slice(overlap));
+    trimLogs();
+  } catch (error) {
+    showGlobalError(`Не удалось загрузить логи: ${errorText(error)}`);
+  } finally {
+    bufferedLiveLogs.length = 0;
+    logsReady = true;
+    renderLogs(true);
+  }
+}
+
+function buildPresetControls(presets: Preset[]) {
+  const box = $("preset-list");
+  box.querySelectorAll("[data-preset-label]").forEach((node) => node.remove());
+  presets.forEach((preset) => {
+    const label = document.createElement("label");
+    label.className = "preset-chip";
+    label.dataset.presetLabel = "1";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.dataset.preset = "1";
+    checkbox.value = preset.key;
+    const text = document.createElement("span");
+    text.textContent = preset.title;
+    checkbox.addEventListener("change", () => {
+      if (!current) return;
+      const next = cloneProfile(current.profile);
+      next.proxyPresets = Array.from(document.querySelectorAll<HTMLInputElement>('#preset-list input[data-preset]:checked')).map((item) => item.value);
+      void commitProfile(next);
+    });
+    label.append(checkbox, text);
+    box.append(label);
+  });
+  if (current) render(current);
+}
+
+async function loadPresets() {
+  try {
+    buildPresetControls(await Presets() as unknown as Preset[] ?? []);
+  } catch (error) {
+    setError($("routing-error"), `Не удалось загрузить пресеты: ${errorText(error)}`, 0);
+  }
+}
+
+let activeModal: HTMLElement | null = null;
+let focusBeforeModal: HTMLElement | null = null;
+let elevateForConnect = false;
+
+function openModal(id: string, focusId: string) {
+  if (activeModal && activeModal.id !== id) activeModal.classList.add("hidden");
+  focusBeforeModal = document.activeElement as HTMLElement | null;
+  activeModal = $(id);
+  activeModal.classList.remove("hidden");
+  window.setTimeout(() => $<HTMLButtonElement>(focusId).focus(), 0);
+}
+
+function hideModal(id: string, restoreFocus = true) {
+  $(id).classList.add("hidden");
+  if (activeModal?.id === id) activeModal = null;
+  if (restoreFocus) focusBeforeModal?.focus();
+  focusBeforeModal = null;
+}
+
+function openElevation(forConnect: boolean) {
+  elevateForConnect = forConnect;
+  $<HTMLButtonElement>("elevate-cancel").textContent = forConnect ? "Отмена" : "Остаться в Proxy";
+  openModal("elevate-modal", "elevate-restart");
+}
+
+async function closeElevation(revert: boolean) {
+  if (revert && current) {
+    const next = cloneSettings(current.settings);
+    next.mode = "proxy";
+    await commitSettings(next);
+  }
+  hideModal("elevate-modal");
+  elevateForConnect = false;
+}
+
+// Mirrors backend validation closely enough to split a mixed textarea into
+// the domain and IP fields. The backend remains the source of truth.
+const looksLikeIP = (value: string) =>
+  /^\d{1,3}(\.\d{1,3}){3}(\/\d{1,2})?$/.test(value) ||
+  (value.includes(":") && /^[0-9a-fA-F:]+(\/\d{1,3})?$/.test(value));
 
 function wire() {
-  // Simple/advanced settings mode — a UI-only preference, not sent to the backend.
-  const advancedToggle = <HTMLInputElement>$("advanced-toggle");
-  const storedAdvanced = localStorage.getItem(ADVANCED_MODE_KEY) === "1";
-  advancedToggle.checked = storedAdvanced;
-  applyAdvancedMode(storedAdvanced);
+  const advancedToggle = $<HTMLInputElement>("advanced-toggle");
+  const advanced = localStorage.getItem("ui.advanced") === "1";
+  advancedToggle.checked = advanced;
+  $("tab-settings").classList.toggle("simple-mode", !advanced);
   advancedToggle.addEventListener("change", () => {
-    localStorage.setItem(ADVANCED_MODE_KEY, advancedToggle.checked ? "1" : "0");
-    applyAdvancedMode(advancedToggle.checked);
+    localStorage.setItem("ui.advanced", advancedToggle.checked ? "1" : "0");
+    $("tab-settings").classList.toggle("simple-mode", !advancedToggle.checked);
   });
 
-  // Error toasts: click anywhere on a shown `.error` to dismiss early.
-  document.addEventListener("click", (e) => {
-    const target = e.target as HTMLElement;
-    if (target.classList.contains("error") && target.classList.contains("show")) {
+  document.addEventListener("click", (event) => {
+    const target = event.target as HTMLElement;
+    if (target.classList.contains("error-toast") && target.classList.contains("show")) {
+      transientGlobalError = "";
+      dismissedBackendError = current?.lastError ?? "";
+      window.clearTimeout(transientGlobalErrorTimer);
       target.classList.remove("show");
     }
   });
 
-  // Tabs
-  document.querySelectorAll<HTMLElement>(".tab").forEach((b) => {
-    b.addEventListener("click", () => setTab(b.dataset.tab!));
+  const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>(".tab"));
+  tabs.forEach((tab, index) => {
+    tab.addEventListener("click", () => setTab(tab.dataset.tab!));
+    tab.addEventListener("keydown", (event) => {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight" && event.key !== "Home" && event.key !== "End") return;
+      event.preventDefault();
+      const nextIndex = event.key === "Home" ? 0
+        : event.key === "End" ? tabs.length - 1
+        : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+      setTab(tabs[nextIndex].dataset.tab!, true);
+    });
   });
 
-  // Distinguishes how the elevate modal was opened: from the power button
-  // (connect intent — auto-connect after restart, cancel leaves TUN as-is) vs
-  // from the mode dropdown (cancel reverts to proxy).
-  let elevateForConnect = false;
-
-  // Power button: toggle based on current state.
-  $("power-btn").addEventListener("click", () => {
-    const c = current?.conn;
-    if (c === "connected") {
-      Disconnect().catch((e) => setError($("error-line"), String(e)));
-    } else if (c === "disconnected" || c === "error") {
-      // TUN needs admin. If unelevated, offer restart-with-admin instead of a
-      // doomed Connect that the backend would reject.
-      if (
-        current.settings.mode === "tun" &&
-        current.caps.tunSupported &&
-        !current.caps.elevated
-      ) {
-        elevateForConnect = true;
-        $("elevate-modal").classList.remove("hidden");
-        return;
+  $<HTMLButtonElement>("power-btn").addEventListener("click", async () => {
+    if (!current) return;
+    if (current.servers.length === 0) {
+      setTab("settings");
+      $("section-servers").setAttribute("open", "");
+      $<HTMLInputElement>("link-input").focus();
+      setError($("link-error"), "Сначала добавьте VLESS-сервер", 0);
+      return;
+    }
+    if (connectionActionPending) return;
+    if (current.conn === "connected") {
+      connectionActionPending = true;
+      render(current);
+      try {
+        await Disconnect();
+      } catch (error) {
+        showGlobalError(errorText(error));
+      } finally {
+        connectionActionPending = false;
+        if (current) render(current);
       }
-      Connect().catch((e) => setError($("error-line"), String(e)));
+    } else if (current.conn === "disconnected" || current.conn === "error") {
+      if (current.settings.mode === "tun" && current.caps.tunSupported && !current.caps.elevated) {
+        openElevation(true);
+      } else {
+        connectionActionPending = true;
+        render(current);
+        try {
+          await Connect();
+        } catch (error) {
+          showGlobalError(errorText(error));
+        } finally {
+          connectionActionPending = false;
+          if (current) render(current);
+        }
+      }
     }
-    // connecting/disconnecting: ignore.
   });
 
-  $("server-select").addEventListener("change", () => {
-    const v = parseInt((<HTMLSelectElement>$("server-select")).value, 10);
-    if (v >= 0) SetActiveServer(v);
+  $<HTMLSelectElement>("server-select").addEventListener("change", async (event) => {
+    const select = event.currentTarget as HTMLSelectElement;
+    const index = Number.parseInt(select.value, 10);
+    if (!current || index < 0) return;
+    select.disabled = true;
+    try {
+      await SetActiveServer(index);
+    } catch (error) {
+      select.value = String(current.activeServer);
+      showGlobalError(`Не удалось выбрать сервер: ${errorText(error)}`);
+    } finally {
+      select.disabled = false;
+    }
   });
 
-  $("add-server-btn").addEventListener("click", () => {
-    const input = <HTMLInputElement>$("link-input");
-    const btn = <HTMLButtonElement>$("add-server-btn");
-    if (btn.disabled) return;
-    btn.disabled = true;
-    AddServer(input.value)
-      .then(() => {
+  $<HTMLFormElement>("add-server-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const input = $<HTMLInputElement>("link-input");
+    const button = $<HTMLButtonElement>("add-server-btn");
+    const link = input.value.trim();
+    if (!link) {
+      setError($("link-error"), "Вставьте ссылку vless://", 0);
+      input.focus();
+      return;
+    }
+    void withBusy(button, async () => {
+      try {
+        await AddServer(link);
         input.value = "";
+        input.classList.remove("onboard-hint");
         setError($("link-error"), "");
-      })
-      .catch((e) => setError($("link-error"), String(e)))
-      .finally(() => {
-        btn.disabled = false;
-      });
-  });
-
-  const pushProfile = () => {
-    UpdateProfile(current.profile)
-      .then(() => setError($("routing-error"), ""))
-      .catch((e) => setError($("routing-error"), String(e)));
-  };
-
-  $("tg-toggle").addEventListener("change", () => {
-    current.profile.telegram = (<HTMLInputElement>$("tg-toggle")).checked;
-    pushProfile();
-  });
-  $("ru-toggle").addEventListener("change", () => {
-    current.profile.forceRUDirect = (<HTMLInputElement>$("ru-toggle")).checked;
-    pushProfile();
-  });
-
-  // Preset checkboxes (built once; render() syncs the checked state).
-  // `data-preset` marks these (as opposed to #tg-toggle, which also lives
-  // inside #preset-list for layout but is NOT one of these — see below) so
-  // the change handler's query doesn't sweep up Telegram's checkbox.
-  const presetBox = $("preset-list");
-  PRESETS.forEach((p) => {
-    const label = document.createElement("label");
-    const cb = document.createElement("input");
-    cb.type = "checkbox";
-    cb.className = "toggle-switch";
-    cb.dataset.preset = "1";
-    cb.value = p.key;
-    cb.addEventListener("change", () => {
-      current.profile.proxyPresets = Array.from(
-        document.querySelectorAll<HTMLInputElement>('#preset-list input[data-preset]:checked'),
-      ).map((c) => c.value);
-      pushProfile();
+      } catch (error) {
+        setError($("link-error"), errorText(error), 0);
+      }
     });
-    label.append(cb, " " + p.title);
-    presetBox.append(label);
   });
 
-  // Address lists: one entry per line; IPs/CIDRs and domains are split into the
-  // profile's separate lists (backend validates each).
-  const wireListArea = (id: string, apply: (domains: string[], ips: string[]) => void) => {
-    $(id).addEventListener("change", () => {
-      const lines = (<HTMLTextAreaElement>$(id)).value
-        .split("\n")
-        .map((s) => s.trim())
-        .filter(Boolean);
-      apply(lines.filter((l) => !looksLikeIP(l)), lines.filter(looksLikeIP));
-      pushProfile();
+  $<HTMLInputElement>("tg-toggle").addEventListener("change", (event) => {
+    if (!current) return;
+    const next = cloneProfile(current.profile);
+    next.telegram = (event.currentTarget as HTMLInputElement).checked;
+    void commitProfile(next);
+  });
+  $<HTMLInputElement>("ru-toggle").addEventListener("change", (event) => {
+    if (!current) return;
+    const next = cloneProfile(current.profile);
+    next.forceRUDirect = (event.currentTarget as HTMLInputElement).checked;
+    void commitProfile(next);
+  });
+
+  const wireList = (id: string, apply: (profile: Profile, domains: string[], ips: string[]) => void) => {
+    $<HTMLTextAreaElement>(id).addEventListener("change", (event) => {
+      if (!current) return;
+      const lines = (event.currentTarget as HTMLTextAreaElement).value.split("\n").map((line) => line.trim()).filter(Boolean);
+      const next = cloneProfile(current.profile);
+      apply(next, lines.filter((line) => !looksLikeIP(line)), lines.filter(looksLikeIP));
+      void commitProfile(next);
     });
   };
-  wireListArea("proxy-list", (domains, ips) => {
-    current.profile.customProxyDomains = domains;
-    current.profile.customProxyIPs = ips;
+  wireList("proxy-list", (profile, domains, ips) => {
+    profile.customProxyDomains = domains;
+    profile.customProxyIPs = ips;
   });
-  wireListArea("direct-list", (domains, ips) => {
-    current.profile.customDirectDomains = domains;
-    current.profile.customDirectIPs = ips;
+  wireList("direct-list", (profile, domains, ips) => {
+    profile.customDirectDomains = domains;
+    profile.customDirectIPs = ips;
   });
-  $("routing-mode-select").addEventListener("change", () => {
-    const full = (<HTMLSelectElement>$("routing-mode-select")).value === "full";
-    const prev = current.profile.full;
-    current.profile.full = full;
-    $("whitelist-only").classList.toggle("hidden", full);
-    UpdateProfile(current.profile).catch((e) => {
-      current.profile.full = prev;
-      (<HTMLSelectElement>$("routing-mode-select")).value = prev ? "full" : "whitelist";
-      $("whitelist-only").classList.toggle("hidden", prev);
-      setError($("error-line"), String(e));
+
+  $<HTMLSelectElement>("routing-mode-select").addEventListener("change", (event) => {
+    if (!current) return;
+    const next = cloneProfile(current.profile);
+    next.full = (event.currentTarget as HTMLSelectElement).value === "full";
+    void commitProfile(next);
+  });
+
+  $<HTMLSelectElement>("mode-select").addEventListener("change", async (event) => {
+    if (!current) return;
+    const select = event.currentTarget as HTMLSelectElement;
+    const next = cloneSettings(current.settings);
+    next.mode = select.value;
+    select.disabled = true;
+    const saved = await commitSettings(next);
+    select.disabled = false;
+    if (saved && next.mode === "tun" && current.caps.tunSupported && !current.caps.elevated) openElevation(false);
+  });
+
+  const wireSettingCheckbox = (id: string, key: keyof Pick<Settings, "killSwitch" | "mux" | "autoStart" | "autoConnect">) => {
+    $<HTMLInputElement>(id).addEventListener("change", (event) => {
+      if (!current) return;
+      const next = cloneSettings(current.settings);
+      next[key] = (event.currentTarget as HTMLInputElement).checked;
+      void commitSettings(next);
     });
+  };
+  wireSettingCheckbox("kill-toggle", "killSwitch");
+  wireSettingCheckbox("mux-toggle", "mux");
+  wireSettingCheckbox("autostart-toggle", "autoStart");
+  wireSettingCheckbox("autoconnect-toggle", "autoConnect");
+  $<HTMLSelectElement>("loglevel-select").addEventListener("change", (event) => {
+    if (!current) return;
+    const next = cloneSettings(current.settings);
+    next.logLevel = (event.currentTarget as HTMLSelectElement).value;
+    void commitSettings(next);
   });
-  $("mode-select").addEventListener("change", () => {
-    const val = (<HTMLSelectElement>$("mode-select")).value;
-    current.settings.mode = val;
-    pushSettings();
-    // TUN needs admin. If we are not elevated, offer a restart-with-admin.
-    if (val === "tun" && current.caps.tunSupported && !current.caps.elevated) {
-      elevateForConnect = false;
-      $("elevate-modal").classList.remove("hidden");
-    }
-  });
-  $("kill-toggle").addEventListener("change", () => {
-    current.settings.killSwitch = (<HTMLInputElement>$("kill-toggle")).checked;
-    pushSettings();
-  });
-  $("mux-toggle").addEventListener("change", () => {
-    current.settings.mux = (<HTMLInputElement>$("mux-toggle")).checked;
-    pushSettings();
-  });
-  $("autostart-toggle").addEventListener("change", () => {
-    const cb = <HTMLInputElement>$("autostart-toggle");
-    const prev = current.settings.autoStart;
-    current.settings.autoStart = cb.checked;
-    UpdateSettings(current.settings).catch((e) => {
-      current.settings.autoStart = prev;
-      cb.checked = prev;
-      setError($("error-line"), String(e));
-    });
-  });
-  $("autoconnect-toggle").addEventListener("change", () => {
-    const cb = <HTMLInputElement>$("autoconnect-toggle");
-    const prev = current.settings.autoConnect;
-    current.settings.autoConnect = cb.checked;
-    UpdateSettings(current.settings).catch((e) => {
-      current.settings.autoConnect = prev;
-      cb.checked = prev;
-      setError($("error-line"), String(e));
-    });
-  });
-  $("loglevel-select").addEventListener("change", () => {
-    current.settings.logLevel = (<HTMLSelectElement>$("loglevel-select")).value;
-    pushSettings();
-  });
-  $("clear-logs-btn").addEventListener("click", () => {
+
+  $<HTMLButtonElement>("clear-logs-btn").addEventListener("click", () => {
     logLines.length = 0;
-    $("log-view").textContent = "";
+    renderLogs();
   });
 
-  // Close-choice modal.
-  const closeModal = $("close-modal");
-  $("modal-hide").addEventListener("click", () => {
-    closeModal.classList.add("hidden");
-    HideToTray();
+  $<HTMLButtonElement>("modal-hide").addEventListener("click", () => {
+    hideModal("close-modal", false);
+    void HideToTray();
   });
-  $("modal-quit").addEventListener("click", () => {
-    QuitApp();
-  });
-  $("modal-cancel").addEventListener("click", () => {
-    closeModal.classList.add("hidden");
-  });
+  $<HTMLButtonElement>("modal-quit").addEventListener("click", () => void QuitApp());
+  $<HTMLButtonElement>("modal-cancel").addEventListener("click", () => hideModal("close-modal"));
   EventsOn("close-requested", () => {
-    closeModal.classList.remove("hidden");
-  });
-  // Escape dismisses the close-choice modal (same as Отмена). Yields to the
-  // elevate modal when both happen to be open (it handles its own Escape).
-  document.addEventListener("keydown", (e) => {
-    const elevateOpen = !$("elevate-modal").classList.contains("hidden");
-    if (e.key === "Escape" && !closeModal.classList.contains("hidden") && !elevateOpen) {
-      closeModal.classList.add("hidden");
-    }
+    if (!activeModal) openModal("close-modal", "modal-hide");
   });
 
-  // Elevate (restart-with-admin) modal.
-  const elevateModal = $("elevate-modal");
-  // Close the modal. When opened from the mode dropdown (revert=true) we fall
-  // back to proxy; when opened from the power button we leave the mode as TUN.
-  const closeElevate = (revert: boolean) => {
-    elevateModal.classList.add("hidden");
-    if (revert) {
-      const sel = <HTMLSelectElement>$("mode-select");
-      sel.value = "proxy";
-      current.settings.mode = "proxy";
-      pushSettings();
-    }
-    elevateForConnect = false;
-  };
-  $("elevate-restart").addEventListener("click", () => {
-    RelaunchElevated(elevateForConnect).catch((e) => {
-      closeElevate(!elevateForConnect);
-      setError($("error-line"), String(e));
+  $<HTMLButtonElement>("elevate-cancel").addEventListener("click", () => void closeElevation(!elevateForConnect));
+  $<HTMLButtonElement>("elevate-restart").addEventListener("click", () => {
+    const restart = $<HTMLButtonElement>("elevate-restart");
+    const cancel = $<HTMLButtonElement>("elevate-cancel");
+    void withBusy(restart, async () => {
+      cancel.disabled = true;
+      try {
+        await RelaunchElevated(elevateForConnect);
+        restart.textContent = "Перезапуск…";
+        restart.dataset.keepDisabled = "true";
+      } catch (error) {
+        cancel.disabled = false;
+        await closeElevation(!elevateForConnect);
+        showGlobalError(errorText(error));
+      }
     });
   });
-  $("elevate-cancel").addEventListener("click", () => closeElevate(!elevateForConnect));
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !elevateModal.classList.contains("hidden")) {
-      closeElevate(!elevateForConnect);
+
+  document.querySelectorAll<HTMLElement>(".modal-overlay").forEach((overlay) => {
+    overlay.addEventListener("mousedown", (event) => {
+      if (event.target !== overlay) return;
+      if (overlay.id === "close-modal") hideModal("close-modal");
+      else void closeElevation(!elevateForConnect);
+    });
+  });
+  document.addEventListener("keydown", (event) => {
+    if (!activeModal) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      if (activeModal.id === "elevate-modal") void closeElevation(!elevateForConnect);
+      else hideModal(activeModal.id);
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const focusable = Array.from(activeModal.querySelectorAll<HTMLElement>('button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'));
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
     }
   });
 
-  EventsOn("state", (st: State) => {
-    current = st;
-    render(st);
+  EventsOn("state", (state: State) => {
+    stateEventVersion++;
+    applyBackendState(normalizeState(state));
   });
-  EventsOn("log", (line: string) => appendLog(line));
-  EventsOn("update-progress", (p: { done: number; total: number }) => {
-    const pct = p.total > 0 ? Math.round((p.done / p.total) * 100) : 0;
-    $("update-percent").textContent = pct + "%";
-    (<HTMLElement>$("update-bar-fill")).style.width = pct + "%";
+  EventsOn("log", receiveLog);
+  EventsOn("update-progress", (progress: { done: number; total: number }) => {
+    const percent = progress.total > 0 ? Math.max(0, Math.min(100, Math.round(progress.done / progress.total * 100))) : 0;
+    $("update-percent").textContent = `${percent}%`;
+    $("update-bar-fill").style.width = `${percent}%`;
+    const bar = $("update-progress-wrap").querySelector<HTMLElement>("[role=progressbar]");
+    bar?.setAttribute("aria-valuenow", String(percent));
   });
 }
 
-function checkUpdate() {
-  CheckUpdate().then((info) => {
+async function checkUpdate() {
+  try {
+    const info = await CheckUpdate();
     if (!info.available) return;
-    const banner = $("update-banner");
     $("update-version").textContent = info.version;
-    const link = <HTMLAnchorElement>$("update-link");
-    link.href = "#";
-    link.onclick = (e) => { e.preventDefault(); BrowserOpenURL(info.url); };
-
-    $("update-btn").onclick = () => {
-      $("update-text").classList.add("hidden");
-      $("update-progress-wrap").classList.remove("hidden");
-      DownloadAndInstall().catch((err) => {
-        // UAC declined / network / no asset — restore the banner with a note.
-        $("update-progress-wrap").classList.add("hidden");
-        $("update-text").classList.remove("hidden");
-        setError($("error-line"), "Обновление не удалось: " + String(err));
+    $<HTMLButtonElement>("update-link").onclick = () => BrowserOpenURL(info.url);
+    $<HTMLButtonElement>("update-dismiss").onclick = () => $("update-banner").classList.add("hidden");
+    $<HTMLButtonElement>("update-btn").onclick = () => {
+      const button = $<HTMLButtonElement>("update-btn");
+      void withBusy(button, async () => {
+        $("update-text").classList.add("hidden");
+        $("update-progress-wrap").classList.remove("hidden");
+        try {
+          await DownloadAndInstall();
+        } catch (error) {
+          $("update-progress-wrap").classList.add("hidden");
+          $("update-text").classList.remove("hidden");
+          showGlobalError(`Обновление не удалось: ${errorText(error)}`);
+        }
       });
     };
-
-    banner.classList.remove("hidden");
-    $("update-dismiss").onclick = () => banner.classList.add("hidden");
-  }).catch(() => {/* network error — silently ignore */});
+    $("update-banner").classList.remove("hidden");
+  } catch {
+    // Update checks are deliberately silent: connectivity should not affect VPN UX.
+  }
 }
 
 document.addEventListener("DOMContentLoaded", () => {
   wire();
-  refresh();
-  Logs().then((lines) => (lines as string[]).forEach(appendLog));
-  checkUpdate();
+  void Promise.allSettled([refresh(), loadInitialLogs(), loadPresets(), checkUpdate()]);
 });

@@ -3,170 +3,241 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
     <title>KUB Connect</title>
   </head>
-  <body>
-    <div id="update-banner" class="update-banner hidden">
-      <span id="update-text">
-        Доступна новая версия <strong id="update-version"></strong> —
-        <a id="update-link" href="#" target="_blank">в браузере</a>
-        <button id="update-btn" class="update-btn">Обновить</button>
+  <body class="is-loading">
+    <div id="update-banner" class="update-banner hidden" role="status" aria-live="polite">
+      <div class="update-icon" aria-hidden="true">↑</div>
+      <span id="update-text" class="update-copy">
+        <strong>Доступна версия <span id="update-version"></span></strong>
+        <button id="update-link" class="text-button" type="button">Что нового</button>
+        <button id="update-btn" class="button button-small button-accent" type="button">Обновить</button>
       </span>
-      <span id="update-progress-wrap" class="hidden">
-        Скачивание… <span id="update-percent">0%</span>
-        <span class="update-bar"><span id="update-bar-fill" class="update-bar-fill"></span></span>
+      <span id="update-progress-wrap" class="update-progress-wrap hidden">
+        <span>Скачивание <strong id="update-percent">0%</strong></span>
+        <span class="update-bar" role="progressbar" aria-label="Скачивание обновления" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <span id="update-bar-fill" class="update-bar-fill"></span>
+        </span>
       </span>
-      <button id="update-dismiss" class="update-dismiss" title="Закрыть">✕</button>
+      <button id="update-dismiss" class="icon-button update-dismiss" type="button" aria-label="Скрыть уведомление">×</button>
     </div>
-    <div id="app">
-      <nav id="tabbar">
-        <button class="tab active" data-tab="home">Главная</button>
-        <button class="tab" data-tab="settings">Настройки</button>
-        <button class="tab" data-tab="logs">Логи</button>
-      </nav>
 
-      <!-- ГЛАВНАЯ -->
-      <section id="tab-home" class="tab-panel">
-        <div class="home">
-          <button id="power-btn" class="power disconnected" title="Подключить/отключить">
-            <svg class="power-glyph glyph-power" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
-              <line x1="12" y1="2" x2="12" y2="12"></line>
-            </svg>
-            <svg class="power-glyph glyph-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <circle cx="12" cy="12" r="10"></circle>
-              <line x1="12" y1="8" x2="12" y2="12"></line>
-              <line x1="12" y1="16" x2="12.01" y2="16"></line>
-            </svg>
+    <div id="app" class="app-shell">
+      <header class="app-header">
+        <div class="brand" aria-label="KUB Connect">
+          <span class="brand-mark" aria-hidden="true">K</span>
+          <span class="brand-copy">
+            <strong>KUB Connect</strong>
+            <small>Защищённая сеть</small>
+          </span>
+        </div>
+        <nav id="tabbar" class="tabbar" role="tablist" aria-label="Разделы приложения">
+          <button id="tab-button-home" class="tab active" type="button" role="tab" aria-selected="true" aria-controls="tab-home" tabindex="0" data-tab="home">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5v8a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>
+            <span>Главная</span>
           </button>
-          <div id="status-text" class="status-text">Отключено</div>
-          <label class="server-pick">
-            <span class="label">Сервер</span>
-            <select id="server-select"></select>
-          </label>
-          <p id="error-line" class="error"></p>
-        </div>
-      </section>
+          <button id="tab-button-settings" class="tab" type="button" role="tab" aria-selected="false" aria-controls="tab-settings" tabindex="-1" data-tab="settings">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 8.97 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.53-1H3v-4h.08A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 8.97 4.6 1.7 1.7 0 0 0 10 3.08V3h4v.08a1.7 1.7 0 0 0 1.03 1.53 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.53 1H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z"/></svg>
+            <span>Настройки</span>
+          </button>
+          <button id="tab-button-logs" class="tab" type="button" role="tab" aria-selected="false" aria-controls="tab-logs" tabindex="-1" data-tab="logs">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
+            <span>Логи</span>
+          </button>
+        </nav>
+      </header>
 
-      <!-- НАСТРОЙКИ -->
-      <section id="tab-settings" class="tab-panel hidden">
-        <div class="row mode-toggle-row">
-          <label class="mode-switch">
-            <input type="checkbox" id="advanced-toggle" class="toggle-switch" />
-            <span>Расширенный режим</span>
-          </label>
-        </div>
-        <details id="section-servers" open>
-          <summary>Серверы</summary>
-          <div class="row">
-            <input id="link-input" type="text" placeholder="vless://..." />
-            <button id="add-server-btn">Добавить</button>
+      <main class="app-main">
+        <section id="tab-home" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-home" tabindex="0">
+          <div class="home-layout">
+            <article class="connection-card">
+              <div class="connection-heading">
+                <span class="eyebrow">Защита соединения</span>
+                <span id="status-badge" class="status-badge connecting"><span class="status-dot"></span><span id="status-badge-text">Загрузка</span></span>
+              </div>
+
+              <div class="power-stage">
+                <span class="power-orbit" aria-hidden="true"></span>
+                <button id="power-btn" class="power disconnected" type="button" aria-label="Подключиться" aria-describedby="status-description">
+                  <svg class="power-glyph glyph-power" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+                    <line x1="12" y1="2" x2="12" y2="12"></line>
+                  </svg>
+                  <svg class="power-glyph glyph-alert" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                  </svg>
+                </button>
+              </div>
+
+              <div class="connection-copy">
+                <h1 id="status-text">Загрузка…</h1>
+                <p id="status-description">Получаем состояние подключения</p>
+              </div>
+
+              <label class="server-pick" for="server-select">
+                <span class="field-label">Сервер</span>
+                <span class="select-wrap"><select id="server-select" disabled><option>Загружаем серверы…</option></select></span>
+              </label>
+
+            </article>
+
+            <aside class="session-summary" aria-label="Параметры текущей сессии">
+              <div class="summary-item">
+                <span class="summary-icon" aria-hidden="true">↗</span>
+                <span><small>Перехват</small><strong id="home-mode">—</strong></span>
+              </div>
+              <div class="summary-item">
+                <span class="summary-icon" aria-hidden="true">◇</span>
+                <span><small>Маршрутизация</small><strong id="home-routing">—</strong></span>
+              </div>
+              <div class="summary-item">
+                <span class="summary-icon" aria-hidden="true">⌁</span>
+                <span><small>Платформа</small><strong id="home-platform">—</strong></span>
+              </div>
+            </aside>
           </div>
-          <p id="link-error" class="error"></p>
-          <ul id="server-list"></ul>
-        </details>
+        </section>
 
-        <details id="section-connection" open>
-          <summary>Подключение</summary>
-          <div class="row">
-            <select id="mode-select">
-              <option value="proxy">Proxy — без прав администратора</option>
-              <option value="tun">TUN — нужны права администратора</option>
-            </select>
-          </div>
-          <p id="connection-hint" class="hint"></p>
-        </details>
-
-        <details id="section-routing" data-advanced>
-          <summary>Что через VPN</summary>
-          <label class="row">
-            <span class="label">Режим</span>
-            <select id="routing-mode-select">
-              <option value="whitelist">Только выбранное</option>
-              <option value="full">Всё через VPN</option>
-            </select>
-          </label>
-          <p id="routing-hint" class="hint"></p>
-          <div id="whitelist-only">
-            <div id="preset-list" class="preset-list">
-              <label><input type="checkbox" id="tg-toggle" class="toggle-switch" /> Telegram → VPN</label>
-            </div>
-            <span class="hint">Отмеченные сервисы идут через VPN. Telegram включён по умолчанию — если сервер пропускает только его, оставьте остальное выключенным.</span>
-            <label class="col">
-              <span class="label">Свои адреса через VPN</span>
-              <textarea id="proxy-list" rows="4" spellcheck="false"
-                placeholder="youtube.com&#10;geosite:google&#10;1.2.3.4&#10;10.20.0.0/16"></textarea>
+        <section id="tab-settings" class="tab-panel hidden" role="tabpanel" aria-labelledby="tab-button-settings" tabindex="0">
+          <div class="section-header">
+            <div><span class="eyebrow">Конфигурация</span><h1>Настройки</h1></div>
+            <label class="compact-switch">
+              <input type="checkbox" id="advanced-toggle" class="toggle-switch" />
+              <span>Расширенные</span>
             </label>
-            <span class="hint">По одной записи в строке: домен, geosite:категория, IP или CIDR.</span>
           </div>
-          <div id="full-only">
-            <label><input type="checkbox" id="ru-toggle" /> RU напрямую</label>
-            <span class="hint">Российские сайты (geoip:ru) — мимо VPN. Быстрее и без блокировок зарубежных сервисов.</span>
+          <div id="settings-save-status" class="save-status" role="status" aria-live="polite"></div>
+
+          <details id="section-servers" class="settings-card" open>
+            <summary><span><strong>Серверы</strong><small>VLESS-подключения</small></span><span class="summary-chevron" aria-hidden="true"></span></summary>
+            <div class="card-content">
+              <form id="add-server-form" class="input-action">
+                <label class="sr-only" for="link-input">Ссылка VLESS</label>
+                <input id="link-input" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="Вставьте ссылку vless://…" aria-describedby="link-error" />
+                <button id="add-server-btn" class="button button-accent" type="submit">Добавить</button>
+              </form>
+              <p id="link-error" class="field-error" role="alert" aria-live="assertive"></p>
+              <ul id="server-list" class="server-list" aria-label="Добавленные серверы"></ul>
+            </div>
+          </details>
+
+          <details id="section-connection" class="settings-card" open>
+            <summary><span><strong>Подключение</strong><small>Способ перехвата трафика</small></span><span class="summary-chevron" aria-hidden="true"></span></summary>
+            <div class="card-content">
+              <label class="setting-row" for="mode-select">
+                <span><strong>Режим подключения</strong><small id="connection-hint"></small></span>
+                <span class="select-wrap compact"><select id="mode-select">
+                  <option value="proxy">Proxy</option>
+                  <option value="tun">TUN</option>
+                </select></span>
+              </label>
+            </div>
+          </details>
+
+          <details id="section-routing" class="settings-card" data-advanced>
+            <summary><span><strong>Маршрутизация</strong><small>Что направлять через VPN</small></span><span class="summary-chevron" aria-hidden="true"></span></summary>
+            <div class="card-content stack">
+              <label class="setting-row" for="routing-mode-select">
+                <span><strong>Режим маршрутизации</strong><small id="routing-hint"></small></span>
+                <span class="select-wrap compact"><select id="routing-mode-select">
+                  <option value="whitelist">Только выбранное</option>
+                  <option value="full">Всё через VPN</option>
+                </select></span>
+              </label>
+
+              <div id="whitelist-only" class="subsection">
+                <div class="subsection-heading"><strong>Сервисы через VPN</strong><small>Выберите готовые правила</small></div>
+                <div id="preset-list" class="preset-list">
+                  <label class="preset-chip"><input type="checkbox" id="tg-toggle" /> <span>Telegram</span></label>
+                </div>
+                <label class="field-stack" for="proxy-list">
+                  <span class="field-label">Свои адреса через VPN</span>
+                  <textarea id="proxy-list" rows="4" spellcheck="false" placeholder="youtube.com&#10;geosite:google&#10;1.2.3.4&#10;10.20.0.0/16"></textarea>
+                  <small>По одной записи: домен, geosite-категория, IP или CIDR.</small>
+                </label>
+              </div>
+
+              <div id="full-only" class="subsection hidden">
+                <label class="toggle-row"><span><strong>RU напрямую</strong><small>Российские сайты будут открываться вне VPN</small></span><input type="checkbox" id="ru-toggle" class="toggle-switch" /></label>
+              </div>
+
+              <label class="field-stack" for="direct-list">
+                <span class="field-label">Исключения — всегда напрямую</span>
+                <textarea id="direct-list" rows="3" spellcheck="false" placeholder="sberbank.ru&#10;gosuslugi.ru&#10;77.88.8.8"></textarea>
+                <small>Эти домены и IP никогда не направляются в туннель.</small>
+              </label>
+              <p id="routing-error" class="field-error" role="alert" aria-live="assertive"></p>
+
+              <div id="kill-row">
+                <label class="toggle-row"><span><strong>Kill switch</strong><small>Не выпускать выбранный трафик напрямую при обрыве VPN</small></span><input type="checkbox" id="kill-toggle" class="toggle-switch" /></label>
+              </div>
+              <label class="toggle-row" title="Включайте, только если сервер настроен без flow-контроля"><span><strong>Mux</strong><small>Снижает число параллельных подключений Telegram; сервер должен быть без flow</small></span><input type="checkbox" id="mux-toggle" class="toggle-switch" /></label>
+            </div>
+          </details>
+
+          <details id="section-startup" class="settings-card" open>
+            <summary><span><strong>Запуск</strong><small>Поведение приложения при входе</small></span><span class="summary-chevron" aria-hidden="true"></span></summary>
+            <div class="card-content stack compact-stack">
+              <label id="autostart-row" class="toggle-row"><span><strong>Автозапуск</strong><small>Запускать KUB Connect при входе в систему</small></span><input type="checkbox" id="autostart-toggle" class="toggle-switch" /></label>
+              <label class="toggle-row"><span><strong>Автоподключение</strong><small>Подключаться к выбранному серверу после запуска</small></span><input type="checkbox" id="autoconnect-toggle" class="toggle-switch" /></label>
+            </div>
+          </details>
+
+          <details id="section-logs" class="settings-card" data-advanced>
+            <summary><span><strong>Диагностика</strong><small>Детализация журналов</small></span><span class="summary-chevron" aria-hidden="true"></span></summary>
+            <div class="card-content">
+              <label class="setting-row" for="loglevel-select"><span><strong>Уровень логов</strong><small>Подробные логи занимают больше места</small></span><span class="select-wrap compact"><select id="loglevel-select">
+                <option value="error">Тихо</option><option value="warning">Обычный</option><option value="debug">Подробно</option>
+              </select></span></label>
+            </div>
+          </details>
+        </section>
+
+        <section id="tab-logs" class="tab-panel hidden" role="tabpanel" aria-labelledby="tab-button-logs" tabindex="0">
+          <div class="section-header logs-header">
+            <div><span class="eyebrow">Диагностика</span><h1>Логи</h1></div>
+            <button id="clear-logs-btn" class="button" type="button">Очистить экран</button>
           </div>
-          <label class="col">
-            <span class="label">Исключения — всегда мимо VPN</span>
-            <textarea id="direct-list" rows="3" spellcheck="false"
-              placeholder="sberbank.ru&#10;gosuslugi.ru&#10;77.88.8.8"></textarea>
-          </label>
-          <span class="hint">Домены и IP, которые никогда не заворачиваются в туннель (в обоих режимах).</span>
-          <p id="routing-error" class="error"></p>
-          <div id="kill-row">
-            <label><input type="checkbox" id="kill-toggle" /> Kill switch</label>
-            <span class="hint">Если VPN отвалится — блокировать трафик выбранных адресов, чтобы он не утёк напрямую.</span>
+          <div class="log-shell">
+            <div class="log-toolbar"><span class="window-dot red"></span><span class="window-dot yellow"></span><span class="window-dot green"></span><span>kub-connect.log</span></div>
+            <pre id="log-view" tabindex="0" aria-label="Журнал приложения"><span class="log-empty">Здесь появятся события подключения</span></pre>
           </div>
-          <label title="Ускоряет соединение для Telegram — включайте, если сервер настроен без flow-контроля"><input type="checkbox" id="mux-toggle" /> Mux (для Telegram — на сервере клиент без flow)</label>
-        </details>
+        </section>
+      </main>
 
-        <details id="section-startup" open>
-          <summary>Запуск</summary>
-          <label id="autostart-row"><input type="checkbox" id="autostart-toggle" /> Автозапуск при входе в систему</label>
-          <label><input type="checkbox" id="autoconnect-toggle" /> Автоподключение при старте</label>
-        </details>
+      <p id="error-line" class="error-toast" role="alert" aria-live="assertive"></p>
 
-        <details id="section-logs" data-advanced>
-          <summary>Логи</summary>
-          <label class="row">
-            <span class="label">Уровень</span>
-            <select id="loglevel-select">
-              <option value="error">Тихо</option>
-              <option value="warning">Обычный</option>
-              <option value="debug">Подробно</option>
-            </select>
-          </label>
-        </details>
-      </section>
-
-      <!-- ЛОГИ -->
-      <section id="tab-logs" class="tab-panel hidden">
-        <div class="row">
-          <button id="clear-logs-btn">Очистить</button>
-        </div>
-        <pre id="log-view"></pre>
-      </section>
-
-      <div id="app-version" class="version"></div>
+      <footer class="app-footer"><span>Работает на Xray</span><span id="app-version"></span></footer>
     </div>
-    <div id="close-modal" class="modal-overlay hidden">
-      <div class="modal">
-        <p class="modal-title">Закрыть приложение?</p>
-        <p class="modal-text">Свернуть в трей — приложение продолжит работать в фоне.</p>
+
+    <div id="close-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="close-modal-title" aria-describedby="close-modal-text">
+      <div class="modal" tabindex="-1">
+        <div class="modal-icon" aria-hidden="true">×</div>
+        <h2 id="close-modal-title">Закрыть приложение?</h2>
+        <p id="close-modal-text">Можно скрыть окно и оставить защищённое соединение работать в фоне.</p>
         <div class="modal-actions">
-          <button id="modal-hide" class="modal-btn primary">Свернуть в трей</button>
-          <button id="modal-quit" class="modal-btn danger">Выйти</button>
-          <button id="modal-cancel" class="modal-btn">Отмена</button>
+          <button id="modal-hide" class="button button-accent" type="button">Свернуть в трей</button>
+          <button id="modal-cancel" class="button" type="button">Отмена</button>
+          <button id="modal-quit" class="button button-danger-ghost" type="button">Завершить приложение</button>
         </div>
       </div>
     </div>
-    <div id="elevate-modal" class="modal-overlay hidden">
-      <div class="modal">
-        <p class="modal-title">Режим TUN требует прав администратора</p>
-        <p class="modal-text">Чтобы включить TUN, приложение нужно перезапустить с правами администратора. Proxy-режим работает без них.</p>
+
+    <div id="elevate-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="elevate-modal-title" aria-describedby="elevate-modal-text">
+      <div class="modal" tabindex="-1">
+        <div class="modal-icon shield" aria-hidden="true">◆</div>
+        <h2 id="elevate-modal-title">Нужны права администратора</h2>
+        <p id="elevate-modal-text">TUN перехватывает трафик на уровне системы. После подтверждения приложение безопасно перезапустится.</p>
         <div class="modal-actions">
-          <button id="elevate-restart" class="modal-btn primary">Перезапустить с правами</button>
-          <button id="elevate-cancel" class="modal-btn">Отмена</button>
+          <button id="elevate-restart" class="button button-accent" type="button">Перезапустить с правами</button>
+          <button id="elevate-cancel" class="button" type="button">Остаться в Proxy</button>
         </div>
       </div>
     </div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
