@@ -91,9 +91,11 @@ func winFullDownCommands(c Config, dev string) [][]string {
 		{"netsh", "interface", "ipv4", "delete", "route", "prefix=0.0.0.0/1", "interface=" + c.Device},
 		{"netsh", "interface", "ipv4", "delete", "route", "prefix=128.0.0.0/1", "interface=" + c.Device},
 	}
-	for _, ip := range c.ServerIPs {
-		cmds = append(cmds, []string{"netsh", "interface", "ipv4", "delete", "route",
-			"prefix=" + ip + "/32", "interface=" + dev})
+	if dev != "" {
+		for _, ip := range c.ServerIPs {
+			cmds = append(cmds, []string{"netsh", "interface", "ipv4", "delete", "route",
+				"prefix=" + ip + "/32", "interface=" + dev})
+		}
 	}
 	if c.BlockIPv6 {
 		cmds = append(cmds,

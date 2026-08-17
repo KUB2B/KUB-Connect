@@ -42,9 +42,17 @@ func (windowsRouter) Up(c Config) error {
 		if err != nil {
 			return err
 		}
-		return runAll(winFullUpCommands(c, gw, dev))
+		if err := runAll(winFullUpCommands(c, gw, dev)); err != nil {
+			_ = runAllBestEffort(winFullDownCommands(c, dev))
+			return err
+		}
+		return nil
 	}
-	return runAll(winUpCommands(c))
+	if err := runAll(winUpCommands(c)); err != nil {
+		_ = runAllBestEffort(winDownCommands(c))
+		return err
+	}
+	return nil
 }
 
 func (windowsRouter) Down(c Config) error {
@@ -56,7 +64,7 @@ func (windowsRouter) Down(c Config) error {
 			// skipped if the interface is unknown (they are non-persistent anyway).
 			dev = ""
 		}
-		return runAll(winFullDownCommands(c, dev))
+		return runAllBestEffort(winFullDownCommands(c, dev))
 	}
-	return runAll(winDownCommands(c))
+	return runAllBestEffort(winDownCommands(c))
 }

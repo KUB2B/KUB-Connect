@@ -80,3 +80,15 @@ func TestWinFullDownCommands(t *testing.T) {
 		}
 	}
 }
+
+func TestWinFullDownWithoutPhysicalInterfaceSkipsBypass(t *testing.T) {
+	out := joinAll(winFullDownCommands(fullCfg(), ""))
+	if strings.Contains(out, "203.0.113.7/32") {
+		t.Fatalf("down commands include unusable physical bypass delete:\n%s", out)
+	}
+	for _, want := range []string{"prefix=0.0.0.0/1", "prefix=128.0.0.0/1", "prefix=::/1"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("best-effort cleanup missing %q:\n%s", want, out)
+		}
+	}
+}

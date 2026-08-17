@@ -42,14 +42,22 @@ func (linuxRouter) Up(c Config) error {
 		if err != nil {
 			return err
 		}
-		return runAll(linuxFullUpCommands(c, gw, dev))
+		if err := runAll(linuxFullUpCommands(c, gw, dev)); err != nil {
+			_ = runAllBestEffort(linuxFullDownCommands(c))
+			return err
+		}
+		return nil
 	}
-	return runAll(upCommands(c))
+	if err := runAll(upCommands(c)); err != nil {
+		_ = runAllBestEffort(downCommands(c))
+		return err
+	}
+	return nil
 }
 
 func (linuxRouter) Down(c Config) error {
 	if c.FullTunnel {
-		return runAll(linuxFullDownCommands(c))
+		return runAllBestEffort(linuxFullDownCommands(c))
 	}
-	return runAll(downCommands(c))
+	return runAllBestEffort(downCommands(c))
 }

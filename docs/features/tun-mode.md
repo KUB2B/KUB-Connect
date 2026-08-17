@@ -55,3 +55,7 @@ TUN — режим полного перехвата трафика через �
   соединений к серверу.
 - **Консоль netsh мелькает**: подпроцессы `netsh` запускать с
   `SysProcAttr{HideWindow, CreationFlags: CREATE_NO_WINDOW}` на Windows.
+- **PowerShell при включении TUN**: поиск физического default route выполняется
+  напрямую через Windows IP Helper API (`GetIpForwardTable2`), поэтому
+  PowerShell не запускается. `netsh` пока используется только для изменения
+  адреса и маршрутов и работает без консольного окна.
