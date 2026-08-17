@@ -23,10 +23,14 @@ func (e *fakeEmitter) Emit(name string, data any) {
 }
 
 // fakeConnector satisfies Connector.
-type fakeConnector struct{ started, stopped bool }
+type fakeConnector struct {
+	started, stopped bool
+	startErr          error
+	stopErr          error
+}
 
-func (f *fakeConnector) Start() error { f.started = true; return nil }
-func (f *fakeConnector) Stop() error  { f.stopped = true; return nil }
+func (f *fakeConnector) Start() error { f.started = true; return f.startErr }
+func (f *fakeConnector) Stop() error  { f.stopped = true; return f.stopErr }
 
 // testDeps builds a Service backed by a temp dir, an always-elevated stub, and
 // a factory returning fc (recording the ConnConfig it was given).

@@ -3,9 +3,11 @@ package store
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/zki/vless-client/internal/routing"
 	"github.com/zki/vless-client/internal/vless"
@@ -78,16 +80,40 @@ func DefaultState() *State {
 	}
 }
 
-// Save writes state to path as indented JSON, creating parent dirs.
+// Save atomically writes state to path as indented JSON, creating parent dirs.
+// The temporary file lives beside the destination so Rename cannot cross a
+// filesystem boundary; a crash therefore leaves either the old or new JSON.
 func Save(path string, s *State) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o600)
+	tmp, err := os.CreateTemp(dir, ".state-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	if err := tmp.Chmod(0o600); err != nil {
+		tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, path)
 }
 
 // Load reads state from path. A missing file yields DefaultState (no error).
@@ -101,7 +127,20 @@ func Load(path string) (*State, error) {
 	}
 	var s State
 	if err := json.Unmarshal(data, &s); err != nil {
-		return nil, err
+		// Preserve the unreadable bytes for diagnosis, but keep the GUI usable.
+		// Save's atomic rename prevents new torn files; this also recovers files
+		// left by older versions that wrote directly to state.json.
+		backup := fmt.Sprintf("%s.corrupt-%s", path, time.Now().Format("20060102T150405.000000000"))
+		_ = os.Rename(path, backup)
+		return DefaultState(), nil
+	}
+	if s.Settings.Mode != ModeTUN && s.Settings.Mode != ModeProxy {
+		s.Settings.Mode = ModeTUN
+	}
+	if len(s.Servers) == 0 {
+		s.ActiveServer = -1
+	} else if s.ActiveServer < 0 || s.ActiveServer >= len(s.Servers) {
+		s.ActiveServer = 0
 	}
 	s.Settings.LogLevel = NormalizeLogLevel(s.Settings.LogLevel)
 	return &s, nil

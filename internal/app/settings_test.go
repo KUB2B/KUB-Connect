@@ -30,6 +30,18 @@ func TestUpdateProfilePersistsAndEmits(t *testing.T) {
 	}
 }
 
+func TestUpdateProfileRollsBackWhenPersistFails(t *testing.T) {
+	svc, _, _, _ := testDeps(t)
+	before := svc.state.Profile
+	forcePersistFailure(t, svc)
+	if err := svc.UpdateProfile(ProfileDTO{Full: true}); err == nil {
+		t.Fatal("UpdateProfile should fail")
+	}
+	if svc.state.Profile.Full != before.Full {
+		t.Fatalf("profile changed after failed persist: %+v", svc.state.Profile)
+	}
+}
+
 func TestUpdateSettingsPersists(t *testing.T) {
 	svc, _, _, _ := testDeps(t)
 	in := SettingsDTO{Mode: "proxy", AutoConnect: true, AutoStart: false, KillSwitch: false}

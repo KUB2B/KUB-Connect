@@ -92,8 +92,10 @@ func (s *Service) UpdateProfile(p ProfileDTO) error {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	prev := s.state.Profile
 	s.state.Profile = next
 	if err := s.persist(); err != nil {
+		s.state.Profile = prev
 		return err
 	}
 	s.emitState()

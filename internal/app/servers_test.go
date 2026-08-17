@@ -1,10 +1,34 @@
 package app
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 const sampleLink = "vless://b831381d-6324-4d53-ad4f-8cda48b30811@example.com:443" +
 	"?type=tcp&security=reality&pbk=ABCpublicKey&fp=chrome&sni=www.microsoft.com" +
 	"&sid=0123abcd&spx=%2F&flow=xtls-rprx-vision#my-server"
+
+func forcePersistFailure(t *testing.T, svc *Service) {
+	t.Helper()
+	bad := filepath.Join(t.TempDir(), "state-dir")
+	if err := os.Mkdir(bad, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	svc.deps.StatePath = bad // atomic Rename cannot replace a directory
+}
+
+func TestServerMutationsRollbackWhenPersistFails(t *testing.T) {
+	svc, _, _, _ := testDeps(t)
+	forcePersistFailure(t, svc)
+	if err := svc.AddServer(sampleLink); err == nil {
+		t.Fatal("AddServer should fail")
+	}
+	if len(svc.state.Servers) != 0 || svc.state.ActiveServer != -1 {
+		t.Fatalf("failed AddServer leaked state: %+v", svc.state)
+	}
+}
 
 func TestAddServerParsesAndSelectsFirst(t *testing.T) {
 	svc, em, _, _ := testDeps(t)

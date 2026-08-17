@@ -30,7 +30,7 @@ func TestConnectTUNFullPopulatesConfig(t *testing.T) {
 	if err := svc.UpdateProfile(ProfileDTO{Full: true}); err != nil {
 		t.Fatalf("UpdateProfile: %v", err)
 	}
-	if err := svc.UpdateSettings(SettingsDTO{Mode: "tun"}); err != nil {
+	if err := svc.UpdateSettings(SettingsDTO{Mode: "tun", KillSwitch: true}); err != nil {
 		t.Fatalf("UpdateSettings: %v", err)
 	}
 	if err := svc.Connect(); err != nil {
@@ -50,6 +50,9 @@ func TestConnectTUNFullPopulatesConfig(t *testing.T) {
 	}
 	if len(captured.RouteCIDRs) != 0 {
 		t.Error("full mode should clear selective RouteCIDRs")
+	}
+	if captured.KillSwitch {
+		t.Error("selective kill switch must be disabled in full routing mode")
 	}
 }
 
@@ -106,6 +109,44 @@ func TestConnectFactoryFailureGoesToError(t *testing.T) {
 	}
 	if st.LastError == "" {
 		t.Error("LastError should be set on failure")
+	}
+}
+
+func TestConnectStartFailureCleansPartialConnector(t *testing.T) {
+	svc, _, fc, _ := testDeps(t)
+	mustAdd(t, svc, sampleLink)
+	_ = svc.UpdateSettings(SettingsDTO{Mode: "proxy"})
+	fc.startErr = errors.New("partial start")
+	if err := svc.Connect(); err == nil {
+		t.Fatal("expected Connect to fail")
+	}
+	if !fc.stopped {
+		t.Error("failed Start must be followed by Stop cleanup")
+	}
+	if svc.connector != nil {
+		t.Error("connector must be released after successful cleanup")
+	}
+}
+
+func TestConnectStartFailureRetainsConnectorWhenCleanupFails(t *testing.T) {
+	svc, _, fc, _ := testDeps(t)
+	mustAdd(t, svc, sampleLink)
+	_ = svc.UpdateSettings(SettingsDTO{Mode: "proxy"})
+	fc.startErr = errors.New("partial start")
+	fc.stopErr = errors.New("cleanup failed")
+	err := svc.Connect()
+	if err == nil || !strings.Contains(err.Error(), "cleanup failed") {
+		t.Fatalf("Connect error = %v, want cleanup failure", err)
+	}
+	if svc.connector == nil {
+		t.Error("failed cleanup connector must be retained for a later retry")
+	}
+	fc.stopErr = nil
+	if err := svc.Disconnect(); err != nil {
+		t.Fatalf("Disconnect cleanup retry: %v", err)
+	}
+	if svc.connector != nil {
+		t.Error("connector must be released after cleanup retry succeeds")
 	}
 }
 
@@ -243,6 +284,30 @@ func TestConnectTUNExcludesIPv6Routes(t *testing.T) {
 	}
 }
 
+func TestTunRouteCIDRsNormalizesBareIPsAndDuplicates(t *testing.T) {
+	duplicate := routing.TelegramCIDRs[0]
+	got := tunRouteCIDRs(routing.Profile{
+		Telegram: true,
+		CustomProxyIPs: []string{
+			duplicate,
+			"203.0.113.7",
+			"203.0.113.7/32",
+			"2001:db8::1",
+		},
+	})
+	if count := sliceCount(got, duplicate); count != 1 {
+		t.Errorf("duplicate route count = %d, want 1: %v", count, got)
+	}
+	if count := sliceCount(got, "203.0.113.7/32"); count != 1 {
+		t.Errorf("normalized host route count = %d, want 1: %v", count, got)
+	}
+	for _, route := range got {
+		if strings.Contains(route, ":") {
+			t.Errorf("IPv6 route was not removed: %v", got)
+		}
+	}
+}
+
 func sliceContains(s []string, want string) bool {
 	for _, v := range s {
 		if v == want {
@@ -250,6 +315,16 @@ func sliceContains(s []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func sliceCount(s []string, want string) int {
+	count := 0
+	for _, v := range s {
+		if v == want {
+			count++
+		}
+	}
+	return count
 }
 
 func TestConnectPassesLogLevel(t *testing.T) {
@@ -283,6 +358,24 @@ func TestDisconnectStopsConnector(t *testing.T) {
 	}
 	if svc.GetState().Conn != string(ConnDisconnected) {
 		t.Errorf("Conn = %q, want disconnected", svc.GetState().Conn)
+	}
+}
+
+func TestDisconnectFailureRetainsConnectorForCleanupRetry(t *testing.T) {
+	svc, _, fc, _ := connectReadyService(t)
+	if err := svc.Connect(); err != nil {
+		t.Fatal(err)
+	}
+	fc.stopErr = errors.New("restore proxy failed")
+	if err := svc.Disconnect(); err == nil {
+		t.Fatal("Disconnect should report cleanup failure")
+	}
+	if svc.connector == nil {
+		t.Fatal("connector with saved OS state must be retained")
+	}
+	fc.stopErr = nil
+	if err := svc.Connect(); err != nil {
+		t.Fatalf("Connect should retry cleanup before reconnecting: %v", err)
 	}
 }
 

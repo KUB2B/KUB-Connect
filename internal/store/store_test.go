@@ -90,6 +90,25 @@ func TestLoadMissingReturnsDefault(t *testing.T) {
 	}
 }
 
+func TestLoadCorruptBacksUpAndReturnsDefault(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "state.json")
+	if err := os.WriteFile(path, []byte(`{"servers":`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load corrupt: %v", err)
+	}
+	if out.ActiveServer != -1 || out.Settings.Mode != ModeTUN {
+		t.Fatalf("Load corrupt returned non-default state: %+v", out)
+	}
+	backups, err := filepath.Glob(path + ".corrupt-*")
+	if err != nil || len(backups) != 1 {
+		t.Fatalf("corrupt backup = %v, err %v", backups, err)
+	}
+}
+
 func TestSaveLoadRoundTripPendingConnect(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.json")
 	in := &State{

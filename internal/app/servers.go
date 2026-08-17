@@ -14,11 +14,15 @@ func (s *Service) AddServer(link string) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	prevServers := append([]*vless.ServerConfig(nil), s.state.Servers...)
+	prevActive := s.state.ActiveServer
 	s.state.Servers = append(s.state.Servers, cfg)
 	if s.state.ActiveServer < 0 {
 		s.state.ActiveServer = 0
 	}
 	if err := s.persist(); err != nil {
+		s.state.Servers = prevServers
+		s.state.ActiveServer = prevActive
 		return err
 	}
 	s.emitState()
@@ -32,6 +36,8 @@ func (s *Service) RemoveServer(index int) error {
 	if index < 0 || index >= len(s.state.Servers) {
 		return fmt.Errorf("server index %d out of range", index)
 	}
+	prevServers := append([]*vless.ServerConfig(nil), s.state.Servers...)
+	prevActive := s.state.ActiveServer
 	s.state.Servers = append(s.state.Servers[:index], s.state.Servers[index+1:]...)
 	switch {
 	case len(s.state.Servers) == 0:
@@ -42,6 +48,8 @@ func (s *Service) RemoveServer(index int) error {
 		s.state.ActiveServer = 0
 	}
 	if err := s.persist(); err != nil {
+		s.state.Servers = prevServers
+		s.state.ActiveServer = prevActive
 		return err
 	}
 	s.emitState()
@@ -55,8 +63,10 @@ func (s *Service) SetActiveServer(index int) error {
 	if index < 0 || index >= len(s.state.Servers) {
 		return fmt.Errorf("server index %d out of range", index)
 	}
+	prev := s.state.ActiveServer
 	s.state.ActiveServer = index
 	if err := s.persist(); err != nil {
+		s.state.ActiveServer = prev
 		return err
 	}
 	s.emitState()

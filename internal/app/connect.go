@@ -2,9 +2,10 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/zki/vless-client/internal/logbus"
@@ -35,17 +36,32 @@ func tunRouteCIDRs(p routing.Profile) []string {
 		cidrs = append(cidrs, routing.TelegramCIDRs...)
 	}
 	cidrs = append(cidrs, p.CustomProxyIPs...)
-	return ipv4Only(cidrs)
+	return normalizeIPv4Routes(cidrs)
 }
 
-// ipv4Only drops IPv6 CIDRs (those containing a colon) from the list, preserving
-// order. See tunRouteCIDRs for why IPv6 is kept out of the TUN.
-func ipv4Only(cidrs []string) []string {
-	out := cidrs[:0:0]
-	for _, c := range cidrs {
-		if !strings.Contains(c, ":") {
-			out = append(out, c)
+// normalizeIPv4Routes drops IPv6, converts bare IPs to /32 routes and removes
+// exact duplicates after network normalization. netsh requires an explicit
+// prefix, and duplicate routes make an otherwise valid TUN startup fail.
+func normalizeIPv4Routes(entries []string) []string {
+	out := make([]string, 0, len(entries))
+	seen := make(map[string]struct{}, len(entries))
+	for _, entry := range entries {
+		var route string
+		if ip := net.ParseIP(entry); ip != nil {
+			if ip4 := ip.To4(); ip4 != nil {
+				route = ip4.String() + "/32"
+			}
+		} else if ip, network, err := net.ParseCIDR(entry); err == nil && ip.To4() != nil {
+			route = network.String()
 		}
+		if route == "" {
+			continue
+		}
+		if _, exists := seen[route]; exists {
+			continue
+		}
+		seen[route] = struct{}{}
+		out = append(out, route)
 	}
 	return out
 }
@@ -105,6 +121,17 @@ func (s *Service) Connect() error {
 	if s.conn == ConnConnected || s.conn == ConnConnecting {
 		return fmt.Errorf("already %s", s.conn)
 	}
+	// A previous Stop may have failed while restoring OS proxy/routes. Keep the
+	// connector around in that case and retry cleanup before a new session can
+	// overwrite the only object that knows the saved system state.
+	if s.connector != nil {
+		if err := s.connector.Stop(); err != nil {
+			s.setConn(ConnError, err.Error())
+			return fmt.Errorf("cleanup previous connection: %w", err)
+		}
+		s.connector = nil
+		s.stopTailing()
+	}
 	if s.state.ActiveServer < 0 || s.state.ActiveServer >= len(s.state.Servers) {
 		return fmt.Errorf("no active server selected")
 	}
@@ -117,6 +144,18 @@ func (s *Service) Connect() error {
 	s.bus.Append(fmt.Sprintf("connecting to %s (%s:%d)", srv.Name, srv.Host, srv.Port))
 	s.setConn(ConnConnecting, "")
 
+	// The default local port is shared with other VLESS clients and can be
+	// reserved by Windows, so fall back to a free one instead of failing to bind.
+	port, err := freeSocksPort(socksPort)
+	if err != nil {
+		s.setConn(ConnError, err.Error())
+		s.bus.Append("error: " + err.Error())
+		return err
+	}
+	if port != socksPort {
+		s.bus.Append(fmt.Sprintf("note: local port %d is busy — using %d instead", socksPort, port))
+	}
+
 	// TUN mode binds xray's outbound sockets to the physical interface so
 	// direct-tagged traffic exits via the NIC instead of looping back into the
 	// TUN under the split-default routes. Discovered before Build because the
@@ -127,7 +166,7 @@ func (s *Service) Connect() error {
 	}
 
 	cfgJSON, err := xrayconf.Build(srv, s.state.Profile, xrayconf.Options{
-		SocksPort: socksPort,
+		SocksPort: port,
 		LogFile:   s.xrayLogPath(),
 		LogLevel:  s.state.Settings.LogLevel,
 		// Mux tames the Telegram connection storm. It drops the xtls-rprx-vision
@@ -145,7 +184,7 @@ func (s *Service) Connect() error {
 	cc := ConnConfig{
 		XrayJSON:  cfgJSON,
 		SocksHost: "127.0.0.1",
-		SocksPort: socksPort,
+		SocksPort: port,
 		Mode:      mode,
 		LogLevel:  s.state.Settings.LogLevel,
 	}
@@ -183,7 +222,9 @@ func (s *Service) Connect() error {
 			s.bus.Append("note: physical interface unknown — TUN routes whitelisted IPs only; domains/presets are not captured")
 		}
 		if s.state.Settings.KillSwitch {
-			if s.killSwitchSupported() {
+			if s.state.Profile.Full {
+				s.bus.Append("note: kill switch is available only for selective routing — continuing without it")
+			} else if s.killSwitchSupported() {
 				cc.KillSwitch = true
 				s.bus.Append("note: kill switch active — whitelisted IPs are blocked if they leave the TUN")
 			} else {
@@ -198,13 +239,21 @@ func (s *Service) Connect() error {
 		s.bus.Append("error: " + err.Error())
 		return err
 	}
+	// Retain the connector while Start runs. If startup only partially mutates
+	// OS state, Stop gets another chance to clean it and a failed cleanup remains
+	// reachable for the next Connect/Disconnect attempt.
+	s.connector = conn
 	if err := conn.Start(); err != nil {
+		if cleanupErr := conn.Stop(); cleanupErr != nil {
+			err = errors.Join(err, fmt.Errorf("cleanup failed connection: %w", cleanupErr))
+		} else {
+			s.connector = nil
+		}
 		s.setConn(ConnError, err.Error())
 		s.bus.Append("error: start: " + err.Error())
 		return err
 	}
 
-	s.connector = conn
 	s.startTailing()
 	s.bus.Append("connected")
 	s.setConn(ConnConnected, "")
@@ -222,13 +271,13 @@ func (s *Service) Disconnect() error {
 	}
 	s.setConn(ConnDisconnecting, "")
 	err := s.connector.Stop()
-	s.connector = nil
-	s.stopTailing()
 	if err != nil {
 		s.setConn(ConnError, err.Error())
 		s.bus.Append("error: stop: " + err.Error())
 		return err
 	}
+	s.connector = nil
+	s.stopTailing()
 	s.bus.Append("disconnected")
 	s.setConn(ConnDisconnected, "")
 	return nil
