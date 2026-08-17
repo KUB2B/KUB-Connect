@@ -18,12 +18,13 @@ func TestDarwinSetCommands(t *testing.T) {
 	}
 }
 
-func TestDarwinClearCommands(t *testing.T) {
-	got := clearCommands("Wi-Fi")
+func TestDarwinRestoreCommands(t *testing.T) {
+	got := restoreCommands(&darwinProxyState{service: "Wi-Fi", host: "old", port: "9000", enabled: true})
 	want := [][]string{
-		{"networksetup", "-setsocksfirewallproxystate", "Wi-Fi", "off"},
+		{"networksetup", "-setsocksfirewallproxy", "Wi-Fi", "old", "9000"},
+		{"networksetup", "-setsocksfirewallproxystate", "Wi-Fi", "on"},
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("clearCommands =\n%v\nwant\n%v", got, want)
+		t.Errorf("restoreCommands =\n%v\nwant\n%v", got, want)
 	}
 }

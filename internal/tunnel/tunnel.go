@@ -4,6 +4,7 @@
 package tunnel
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/zki/vless-client/internal/firewall"
@@ -21,7 +22,7 @@ type Core interface {
 	Start(jsonConfig []byte) (Stopper, error)
 }
 
-// Proxy sets/clears the system SOCKS proxy.
+// Proxy temporarily replaces/restores the system SOCKS proxy.
 type Proxy interface {
 	Set(host string, port int) error
 	Clear() error
@@ -60,9 +61,13 @@ type Config struct {
 
 // Tunnel is a configured, possibly-running capture session.
 type Tunnel struct {
-	cfg  Config
-	deps Deps
-	inst Stopper
+	cfg        Config
+	deps       Deps
+	inst       Stopper
+	proxySet   bool
+	tunStarted bool
+	routesUp   bool
+	firewallOn bool
 }
 
 // New builds a Tunnel.
@@ -86,6 +91,13 @@ func (t *Tunnel) netcfgConfig() netcfg.Config {
 	}
 }
 
+func (t *Tunnel) rollback(cause error) error {
+	if err := t.Stop(); err != nil {
+		return errors.Join(cause, fmt.Errorf("rollback tunnel: %w", err))
+	}
+	return cause
+}
+
 // Start launches the tunnel. On any step failure it rolls back prior steps.
 func (t *Tunnel) Start() error {
 	inst, err := t.deps.Core.Start(t.cfg.XrayJSON)
@@ -96,38 +108,35 @@ func (t *Tunnel) Start() error {
 
 	switch t.cfg.Mode {
 	case store.ModeProxy:
+		// Set may fail after changing part of the platform proxy state, so mark
+		// the step first and let Clear perform a best-effort rollback.
+		t.proxySet = true
 		if err := t.deps.Proxy.Set(t.cfg.SocksHost, t.cfg.SocksPort); err != nil {
-			_ = t.inst.Stop()
-			t.inst = nil
-			return fmt.Errorf("set system proxy: %w", err)
+			return t.rollback(fmt.Errorf("set system proxy: %w", err))
 		}
 	case store.ModeTUN:
+		t.tunStarted = true
 		if err := t.deps.Tun.Start(t.cfg.Device, t.socksURL()); err != nil {
-			_ = t.inst.Stop()
-			t.inst = nil
-			return fmt.Errorf("start tun: %w", err)
+			return t.rollback(fmt.Errorf("start tun: %w", err))
 		}
+		// Up is a command sequence and can fail after applying only a prefix of
+		// it. Treat routes as active before entering it so rollback always runs.
+		t.routesUp = true
 		if err := t.deps.Router.Up(t.netcfgConfig()); err != nil {
-			_ = t.deps.Tun.Stop()
-			_ = t.inst.Stop()
-			t.inst = nil
-			return fmt.Errorf("apply routes: %w", err)
+			return t.rollback(fmt.Errorf("apply routes: %w", err))
 		}
 		// Kill switch guards the whitelisted CIDRs; with none (classic full
 		// tunnel) there is nothing to guard, so it is skipped.
 		if t.cfg.KillSwitch && len(t.cfg.RouteCIDRs) > 0 {
+			// Mark it before the call because a failed nft transaction or another
+			// firewall backend may still have applied part of its policy.
+			t.firewallOn = true
 			if err := t.deps.Firewall.On(firewall.Config{Device: t.cfg.Device, CIDRs: t.cfg.RouteCIDRs}); err != nil {
-				_ = t.deps.Router.Down(t.netcfgConfig())
-				_ = t.deps.Tun.Stop()
-				_ = t.inst.Stop()
-				t.inst = nil
-				return fmt.Errorf("enable kill switch: %w", err)
+				return t.rollback(fmt.Errorf("enable kill switch: %w", err))
 			}
 		}
 	default:
-		_ = t.inst.Stop()
-		t.inst = nil
-		return fmt.Errorf("unknown mode %q", t.cfg.Mode)
+		return t.rollback(fmt.Errorf("unknown mode %q", t.cfg.Mode))
 	}
 	return nil
 }
@@ -144,17 +153,44 @@ func (t *Tunnel) Stop() error {
 
 	switch t.cfg.Mode {
 	case store.ModeProxy:
-		record(t.deps.Proxy.Clear())
-	case store.ModeTUN:
-		if t.cfg.KillSwitch && len(t.cfg.RouteCIDRs) > 0 {
-			record(t.deps.Firewall.Off())
+		if t.proxySet {
+			if err := t.deps.Proxy.Clear(); err != nil {
+				record(err)
+			} else {
+				t.proxySet = false
+			}
 		}
-		record(t.deps.Router.Down(t.netcfgConfig()))
-		record(t.deps.Tun.Stop())
+	case store.ModeTUN:
+		// Keep the kill switch installed while routes, the TUN engine and core
+		// are being dismantled. Removing it first creates a short leak window.
+		if t.routesUp {
+			if err := t.deps.Router.Down(t.netcfgConfig()); err != nil {
+				record(err)
+			} else {
+				t.routesUp = false
+			}
+		}
+		if t.tunStarted {
+			if err := t.deps.Tun.Stop(); err != nil {
+				record(err)
+			} else {
+				t.tunStarted = false
+			}
+		}
 	}
 	if t.inst != nil {
-		record(t.inst.Stop())
-		t.inst = nil
+		if err := t.inst.Stop(); err != nil {
+			record(err)
+		} else {
+			t.inst = nil
+		}
+	}
+	if t.cfg.Mode == store.ModeTUN && t.firewallOn {
+		if err := t.deps.Firewall.Off(); err != nil {
+			record(err)
+		} else {
+			t.firewallOn = false
+		}
 	}
 	return firstErr
 }

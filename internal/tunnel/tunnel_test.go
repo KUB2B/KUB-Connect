@@ -2,6 +2,7 @@ package tunnel
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/zki/vless-client/internal/firewall"
@@ -9,14 +10,24 @@ import (
 	"github.com/zki/vless-client/internal/store"
 )
 
-type fakeStopper struct{ stopped bool }
+type fakeStopper struct {
+	stopped bool
+	order   *[]string
+}
 
-func (f *fakeStopper) Stop() error { f.stopped = true; return nil }
+func (f *fakeStopper) Stop() error {
+	f.stopped = true
+	if f.order != nil {
+		*f.order = append(*f.order, "core")
+	}
+	return nil
+}
 
 type fakeCore struct {
 	started bool
 	inst    *fakeStopper
 	err     error
+	order   *[]string
 }
 
 func (f *fakeCore) Start(_ []byte) (Stopper, error) {
@@ -24,7 +35,7 @@ func (f *fakeCore) Start(_ []byte) (Stopper, error) {
 		return nil, f.err
 	}
 	f.started = true
-	f.inst = &fakeStopper{}
+	f.inst = &fakeStopper{order: f.order}
 	return f.inst, nil
 }
 
@@ -33,24 +44,42 @@ type fakeProxy struct{ set, cleared bool }
 func (f *fakeProxy) Set(_ string, _ int) error { f.set = true; return nil }
 func (f *fakeProxy) Clear() error              { f.cleared = true; return nil }
 
-type fakeTun struct{ started, stopped bool }
+type fakeTun struct {
+	started, stopped bool
+	order            *[]string
+}
 
 func (f *fakeTun) Start(_, _ string) error { f.started = true; return nil }
-func (f *fakeTun) Stop() error             { f.stopped = true; return nil }
+func (f *fakeTun) Stop() error {
+	f.stopped = true
+	if f.order != nil {
+		*f.order = append(*f.order, "tun")
+	}
+	return nil
+}
 
 type fakeRouter struct {
 	up, down bool
 	upCfg    netcfg.Config // last config passed to Up
+	err      error
+	order    *[]string
 }
 
-func (f *fakeRouter) Up(c netcfg.Config) error   { f.up = true; f.upCfg = c; return nil }
-func (f *fakeRouter) Down(_ netcfg.Config) error { f.down = true; return nil }
+func (f *fakeRouter) Up(c netcfg.Config) error { f.up = true; f.upCfg = c; return f.err }
+func (f *fakeRouter) Down(_ netcfg.Config) error {
+	f.down = true
+	if f.order != nil {
+		*f.order = append(*f.order, "routes")
+	}
+	return nil
+}
 
 type fakeFirewall struct {
 	on, off bool
 	device  string
 	cidrs   []string
 	err     error
+	order   *[]string
 }
 
 func (f *fakeFirewall) On(c firewall.Config) error {
@@ -62,10 +91,17 @@ func (f *fakeFirewall) On(c firewall.Config) error {
 	f.cidrs = c.CIDRs
 	return nil
 }
-func (f *fakeFirewall) Off() error { f.off = true; return nil }
+func (f *fakeFirewall) Off() error {
+	f.off = true
+	if f.order != nil {
+		*f.order = append(*f.order, "firewall")
+	}
+	return nil
+}
 
 func newDeps() (*fakeCore, *fakeProxy, *fakeTun, *fakeRouter, *fakeFirewall, Deps) {
-	c, p, tn, r, fw := &fakeCore{}, &fakeProxy{}, &fakeTun{}, &fakeRouter{}, &fakeFirewall{}
+	order := &[]string{}
+	c, p, tn, r, fw := &fakeCore{order: order}, &fakeProxy{}, &fakeTun{order: order}, &fakeRouter{order: order}, &fakeFirewall{order: order}
 	return c, p, tn, r, fw, Deps{Core: c, Proxy: p, Tun: tn, Router: r, Firewall: fw}
 }
 
@@ -95,7 +131,7 @@ func TestProxyModeStartStop(t *testing.T) {
 }
 
 func TestTunModeStartStop(t *testing.T) {
-	c, _, tnsvc, r, _, deps := newDeps()
+	c, _, tnsvc, r, fw, deps := newDeps()
 	tn := New(baseConfig(store.ModeTUN), deps)
 	if err := tn.Start(); err != nil {
 		t.Fatalf("Start: %v", err)
@@ -108,6 +144,10 @@ func TestTunModeStartStop(t *testing.T) {
 	}
 	if !r.down || !tnsvc.stopped || !c.inst.stopped {
 		t.Errorf("tun mode stop should revert routes, stop tun, stop core")
+	}
+	wantOrder := []string{"routes", "tun", "core"}
+	if !reflect.DeepEqual(*fw.order, wantOrder) {
+		t.Errorf("TUN stop order = %v, want %v", *fw.order, wantOrder)
 	}
 }
 
@@ -168,6 +208,22 @@ func TestStartRollsBackOnFirewallFailure(t *testing.T) {
 	}
 	if !r.down || !tnsvc.stopped || !c.inst.stopped {
 		t.Errorf("firewall failure must roll back routes/tun/core: down=%v tunStopped=%v coreStopped=%v",
+			r.down, tnsvc.stopped, c.inst.stopped)
+	}
+	if !fw.off {
+		t.Error("firewall failure must remove a partially applied policy")
+	}
+}
+
+func TestStartRollsBackPartialRoutesOnRouterFailure(t *testing.T) {
+	c, _, tnsvc, r, _, deps := newDeps()
+	r.err = errors.New("route failed halfway")
+	tn := New(baseConfig(store.ModeTUN), deps)
+	if err := tn.Start(); err == nil {
+		t.Fatal("expected router failure")
+	}
+	if !r.down || !tnsvc.stopped || !c.inst.stopped {
+		t.Fatalf("router failure rollback: down=%v tunStopped=%v coreStopped=%v",
 			r.down, tnsvc.stopped, c.inst.stopped)
 	}
 }
