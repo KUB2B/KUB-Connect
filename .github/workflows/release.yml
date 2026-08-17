@@ -11,7 +11,11 @@ concurrency:
 
 jobs:
   release:
-    runs-on: [self-hosted, linux, x64]
+    # GitHub-hosted: the repo is public, so these minutes are free and a release
+    # no longer depends on a particular machine being online. Every tool the job
+    # needs (GTK/WebKit, mingw, NSIS, wails, go-win7) is installed by the steps
+    # below, so a bare image is enough.
+    runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
