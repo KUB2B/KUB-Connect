@@ -36,7 +36,7 @@ make gui            # = wails build -tags "wails webkit2_41"
 
 # Headless CLI (без GUI, без CGO)
 make headless
-go run ./cmd/headless -link 'vless://...'
+XRAY_LOCATION_ASSET=data go run ./cmd/headless -link 'vless://...'
 
 # Кросс-сборка Windows (нужны mingw + nsis)
 make windows
@@ -94,7 +94,8 @@ cd frontend && npm run dev     # vite dev server
 - **`frontend/`** — vanilla TS + Vite, один файл `src/main.ts`, общается с Go
   через сгенерированные биндинги `frontend/wailsjs/` (регенерируются
   `wails build`/`wails dev`, изменения в них не редактировать руками).
-- **`cmd/headless`** — CLI без GUI поверх того же `internal/app`/`internal/core`.
+- **`cmd/headless`** — отладочный CLI без GUI: `xrayconf` + `tunnel` + `core`
+  напрямую, **мимо `internal/app`**, только режим Proxy. Не входит в релизы.
 
 Кросс-платформенность держится на **build tags**, а не на рантайм-ветвлении:
 для правки платформенной логики почти всегда нужно поправить несколько файлов
