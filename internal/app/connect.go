@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -237,6 +239,13 @@ func (s *Service) Connect() error {
 				s.bus.Append("note: kill switch not supported on this OS — continuing without it")
 			}
 		}
+	}
+
+	// xray appends to its log file and the tailer reads it from the start, so
+	// without this every connect would replay all earlier sessions into the log
+	// view and the file would grow without bound.
+	if err := os.Truncate(s.xrayLogPath(), 0); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		s.bus.Append("warning: truncate xray log: " + err.Error())
 	}
 
 	conn, err := s.deps.Factory(cc)

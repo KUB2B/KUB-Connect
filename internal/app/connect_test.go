@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -491,5 +492,23 @@ func TestUpdateProfileValidation(t *testing.T) {
 	p := svc.GetState().Profile
 	if len(p.CustomProxyDomains) != 1 || p.CustomProxyDomains[0] != "geosite:google" {
 		t.Errorf("lists not cleaned: %+v", p.CustomProxyDomains)
+	}
+}
+
+func TestConnectTruncatesXrayLog(t *testing.T) {
+	svc, _, _, _ := connectReadyService(t)
+	if err := os.WriteFile(svc.xrayLogPath(), []byte("line from an earlier session\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Connect(); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	t.Cleanup(func() { _ = svc.Disconnect() })
+	data, err := os.ReadFile(svc.xrayLogPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(data) != 0 {
+		t.Errorf("xray.log not truncated on connect: %q", data)
 	}
 }
