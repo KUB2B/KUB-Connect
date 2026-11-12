@@ -242,7 +242,15 @@ func (a *App) beforeClose(ctx context.Context) (preventClose bool) {
 
 // HideToTray hides the window; the app keeps running and is reachable via the
 // tray. Bound to the frontend.
-func (a *App) HideToTray() { wruntime.WindowHide(a.ctx) }
+func (a *App) HideToTray() {
+	if runtime.GOOS == "linux" {
+		// No tray on Linux (tray_stub.go): a hidden window could not be brought
+		// back, so minimise instead.
+		wruntime.WindowMinimise(a.ctx)
+		return
+	}
+	wruntime.WindowHide(a.ctx)
+}
 
 // QuitApp quits the whole app (runs shutdown → Disconnect → proxy cleanup).
 // Bound to the frontend.
