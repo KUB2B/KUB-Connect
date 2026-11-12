@@ -24,7 +24,9 @@ func linuxFullUpCommands(c Config, gw, dev string) [][]string {
 		{"ip", "link", "set", "dev", c.Device, "up"},
 	}
 	for _, ip := range c.ServerIPs {
-		cmds = append(cmds, []string{"ip", "route", "add", ip + "/32", "via", gw, "dev", dev})
+		// replace, not add: a bypass route left by an earlier session (crash,
+		// network change) must not make this connect fail with "File exists".
+		cmds = append(cmds, []string{"ip", "route", "replace", ip + "/32", "via", gw, "dev", dev})
 	}
 	cmds = append(cmds,
 		[]string{"ip", "route", "add", "0.0.0.0/1", "dev", c.Device},
@@ -83,6 +85,20 @@ func winFullUpCommands(c Config, gw, dev string) [][]string {
 	return cmds
 }
 
+// winBypassDeleteCommands removes the server-bypass routes from the physical
+// interface dev. Empty dev yields nothing.
+func winBypassDeleteCommands(c Config, dev string) [][]string {
+	if dev == "" {
+		return nil
+	}
+	var cmds [][]string
+	for _, ip := range c.ServerIPs {
+		cmds = append(cmds, []string{"netsh", "interface", "ipv4", "delete", "route",
+			"prefix=" + ip + "/32", "interface=" + dev})
+	}
+	return cmds
+}
+
 // winFullDownCommands reverses winFullUpCommands. dev is the physical interface
 // index (needed to delete the server-bypass routes). The TUN adapter's address
 // disappears when tun2socks destroys the adapter, so only routes are removed.
@@ -91,12 +107,7 @@ func winFullDownCommands(c Config, dev string) [][]string {
 		{"netsh", "interface", "ipv4", "delete", "route", "prefix=0.0.0.0/1", "interface=" + c.Device},
 		{"netsh", "interface", "ipv4", "delete", "route", "prefix=128.0.0.0/1", "interface=" + c.Device},
 	}
-	if dev != "" {
-		for _, ip := range c.ServerIPs {
-			cmds = append(cmds, []string{"netsh", "interface", "ipv4", "delete", "route",
-				"prefix=" + ip + "/32", "interface=" + dev})
-		}
-	}
+	cmds = append(cmds, winBypassDeleteCommands(c, dev)...)
 	if c.BlockIPv6 {
 		cmds = append(cmds,
 			[]string{"netsh", "interface", "ipv6", "delete", "route", "prefix=::/1", "interface=" + c.Device},

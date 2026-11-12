@@ -24,7 +24,7 @@ func fullCfg() Config {
 func TestLinuxFullUpCommands(t *testing.T) {
 	out := joinAll(linuxFullUpCommands(fullCfg(), "192.168.1.1", "eth0"))
 	for _, want := range []string{
-		"ip route add 203.0.113.7/32 via 192.168.1.1 dev eth0",
+		"ip route replace 203.0.113.7/32 via 192.168.1.1 dev eth0",
 		"ip route add 0.0.0.0/1 dev tun0",
 		"ip route add 128.0.0.0/1 dev tun0",
 		"ip -6 route add ::/1 dev tun0",

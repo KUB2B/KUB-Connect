@@ -48,6 +48,10 @@ func (r *windowsRouter) Up(c Config) error {
 			return err
 		}
 		r.physDev = dev
+		// netsh has no "replace": drop a bypass route left on this interface by
+		// an earlier session (crash, network change) so the add below does not
+		// fail with "object already exists". Normally there is none.
+		_ = runAllBestEffort(winBypassDeleteCommands(c, dev))
 		if err := runAll(winFullUpCommands(c, gw, dev)); err != nil {
 			_ = runAllBestEffort(winFullDownCommands(c, dev))
 			return err
