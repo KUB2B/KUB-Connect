@@ -31,13 +31,20 @@ func Sync(fsys fs.FS, srcDir, destDir string, names []string) error {
 	}
 	for _, name := range names {
 		src := path.Join(srcDir, name)
-		data, err := fs.ReadFile(fsys, src)
+		// Stat first: reading an embedded file copies it to the heap (~30MB
+		// for the geo databases), which the common "already present" path
+		// does not need.
+		srcInfo, err := fs.Stat(fsys, src)
 		if err != nil {
 			return fmt.Errorf("read embedded %s: %w", src, err)
 		}
 		dst := filepath.Join(destDir, name)
-		if fi, err := os.Stat(dst); err == nil && fi.Size() == int64(len(data)) {
+		if fi, err := os.Stat(dst); err == nil && fi.Size() == srcInfo.Size() {
 			continue // already present
+		}
+		data, err := fs.ReadFile(fsys, src)
+		if err != nil {
+			return fmt.Errorf("read embedded %s: %w", src, err)
 		}
 		if err := os.WriteFile(dst, data, 0o644); err != nil {
 			return fmt.Errorf("write %s: %w", dst, err)
