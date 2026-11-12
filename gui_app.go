@@ -22,6 +22,7 @@ import (
 	"github.com/zki/vless-client/internal/netcfg"
 	"github.com/zki/vless-client/internal/privilege"
 	"github.com/zki/vless-client/internal/store"
+	"github.com/zki/vless-client/internal/sysproxy"
 	"github.com/zki/vless-client/internal/tun"
 	"github.com/zki/vless-client/internal/updater"
 )
@@ -76,6 +77,16 @@ func NewApp() *App {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	defer close(a.startupReady)
+
+	// A previous run killed while connected in proxy mode (installer taskkill,
+	// crash, OS shutdown) leaves the OS proxy aimed at a dead local port and
+	// breaks browsing with ERR_PROXY_CONNECTION_FAILED. Nothing is connected
+	// yet, so reset it before autoconnect may set it again.
+	if cleared, err := sysproxy.ClearStale(); err != nil {
+		log.Printf("clear stale proxy: %v", err)
+	} else if cleared {
+		log.Printf("cleared stale system proxy left by a previous run")
+	}
 
 	// Geo databases are comparatively large. Prepare them in parallel with
 	// loading state so the frontend can display saved servers immediately. Any

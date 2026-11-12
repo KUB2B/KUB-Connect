@@ -75,6 +75,22 @@ OutFile "..\..\bin\${INFO_PROJECTNAME}-${ARCH}-installer.exe" # Name of the inst
 InstallDir "$PROGRAMFILES64\${INFO_COMPANYNAME}\${INFO_PRODUCTNAME}" # Default installing folder ($PROGRAMFILES is Program Files folder).
 ShowInstDetails show # This will always show the installation details.
 
+## KUB Connect in proxy mode points the WinINet system proxy at
+## socks=127.0.0.1:<port>. taskkill /F skips the app's cleanup, so the proxy
+## would stay aimed at a dead port (ERR_PROXY_CONNECTION_FAILED). Run right
+## after the app is killed: any such value is stale by then.
+## Note: an elevated installer under a different admin account sees that
+## account's HKCU; the app's own startup cleanup covers that case.
+!macro kub.resetStaleProxy
+    ReadRegStr $1 HKCU "Software\Microsoft\Windows\CurrentVersion\Internet Settings" "ProxyServer"
+    StrCpy $2 $1 16
+    ${If} $2 == "socks=127.0.0.1:"
+        WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Internet Settings" "ProxyEnable" 0
+        System::Call 'wininet::InternetSetOptionW(p 0, i 39, p 0, i 0)'
+        System::Call 'wininet::InternetSetOptionW(p 0, i 37, p 0, i 0)'
+    ${EndIf}
+!macroend
+
 Function .onInit
    !insertmacro wails.checkArchitecture
 
@@ -89,6 +105,7 @@ Function .onInit
          Abort
       do_upgrade:
          ExecWait 'taskkill /F /IM "${PRODUCT_EXECUTABLE}" /T'
+         !insertmacro kub.resetStaleProxy
    ${EndIf}
 FunctionEnd
 
@@ -112,6 +129,11 @@ SectionEnd
 
 Section "uninstall"
     !insertmacro wails.setShellContext
+
+    # Stop a running instance (it would also lock files under $INSTDIR) and
+    # undo the system proxy it may leave behind.
+    ExecWait 'taskkill /F /IM "${PRODUCT_EXECUTABLE}" /T'
+    !insertmacro kub.resetStaleProxy
 
     RMDir /r "$AppData\${PRODUCT_EXECUTABLE}" # Remove the WebView2 DataPath
 
