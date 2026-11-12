@@ -5,6 +5,8 @@ package wintundll
 import (
 	_ "embed"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 
 	"golang.org/x/sys/windows"
@@ -36,6 +38,19 @@ var ensureOnce struct {
 // would otherwise occur deep inside tun2socks when the DLL is unavailable.
 func Ensure() error {
 	ensureOnce.Do(func() {
+		// The installer ships wintun.dll next to the exe, in a directory only
+		// administrators can write. Prefer it: the per-user cache below is
+		// writable by any process of the user, and this DLL runs elevated.
+		if exe, err := os.Executable(); err == nil {
+			installed := filepath.Join(filepath.Dir(exe), dllName)
+			if _, err := os.Stat(installed); err == nil {
+				if _, err := windows.LoadLibraryEx(installed, 0, loadWithAlteredSearchPath); err != nil {
+					ensureOnce.err = fmt.Errorf("wintun: load %s: %w", installed, err)
+				}
+				return
+			}
+		}
+		// Dev / portable run: fall back to the embedded copy.
 		dir, err := DefaultDir()
 		if err != nil {
 			ensureOnce.err = fmt.Errorf("wintun: cache dir: %w", err)

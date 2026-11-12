@@ -24,13 +24,13 @@ func TestExtractWritesFile(t *testing.T) {
 	}
 }
 
-func TestExtractSkipsWhenSizeMatches(t *testing.T) {
+func TestExtractRewritesSameSizeDifferentContent(t *testing.T) {
 	dst := t.TempDir()
 	existing := filepath.Join(dst, "wintun.dll")
 	if err := os.WriteFile(existing, []byte("XXXXX"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// Same size (5 bytes), different content: extract must not rewrite.
+	// Same size (5 bytes), different content: a planted DLL must be replaced.
 	if _, err := extract([]byte("12345"), dst, "wintun.dll"); err != nil {
 		t.Fatalf("extract: %v", err)
 	}
@@ -38,8 +38,8 @@ func TestExtractSkipsWhenSizeMatches(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(got) != "XXXXX" {
-		t.Errorf("rewritten: got %q, want untouched %q", got, "XXXXX")
+	if string(got) != "12345" {
+		t.Errorf("got %q, want the embedded contents %q", got, "12345")
 	}
 }
 

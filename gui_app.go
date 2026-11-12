@@ -22,6 +22,7 @@ import (
 	"github.com/zki/vless-client/internal/netcfg"
 	"github.com/zki/vless-client/internal/privilege"
 	"github.com/zki/vless-client/internal/store"
+	"github.com/zki/vless-client/internal/sysproxy"
 	"github.com/zki/vless-client/internal/tun"
 	"github.com/zki/vless-client/internal/updater"
 )
@@ -77,6 +78,26 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	defer close(a.startupReady)
 
+	// A previous run killed while connected in proxy mode (installer taskkill,
+	// crash, OS shutdown) leaves the OS proxy aimed at a dead local port and
+	// breaks browsing with ERR_PROXY_CONNECTION_FAILED. Nothing is connected
+	// yet, so reset it before autoconnect may set it again.
+	if cleared, err := sysproxy.ClearStale(); err != nil {
+		log.Printf("clear stale proxy: %v", err)
+	} else if cleared {
+		log.Printf("cleared stale system proxy left by a previous run")
+	}
+
+	// Same idea for the kill switch: a crash in TUN mode leaves the firewall
+	// table behind (routes die with the TUN device, the drop rule does not), so
+	// whitelisted IPs stay blocked. Off is idempotent and a no-op where the kill
+	// switch is unsupported. Removing the table needs root.
+	if privilege.IsElevated() {
+		if err := firewall.New().Off(); err != nil {
+			log.Printf("clear stale kill switch: %v", err)
+		}
+	}
+
 	// Geo databases are comparatively large. Prepare them in parallel with
 	// loading state so the frontend can display saved servers immediately. Any
 	// operation that starts xray waits for startupReady below.
@@ -88,7 +109,7 @@ func (a *App) startup(ctx context.Context) {
 		}
 		if dir, err := geoassets.DefaultDir(); err != nil {
 			log.Printf("geo asset dir: %v", err)
-		} else if err := geoassets.Sync(geoAssets, "data", dir, []string{"geoip.dat", "geosite.dat"}); err != nil {
+		} else if err := geoassets.Sync(geoAssets, "data", dir, version, []string{"geoip.dat", "geosite.dat"}); err != nil {
 			log.Printf("geo assets: %v", err)
 		} else {
 			_ = os.Setenv("XRAY_LOCATION_ASSET", dir)
@@ -105,7 +126,7 @@ func (a *App) startup(ctx context.Context) {
 
 	// Diagnostic: capture tun2socks engine logs (per-connection lines, device
 	// read errors) to tun.log, since the GUI process has no usable stderr.
-	if f, err := os.OpenFile(filepath.Join(logDir, "tun.log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644); err != nil {
+	if f, err := os.OpenFile(filepath.Join(logDir, "tun.log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600); err != nil {
 		log.Printf("tun log: %v", err)
 	} else {
 		tun.SetLogWriter(f)
@@ -221,7 +242,15 @@ func (a *App) beforeClose(ctx context.Context) (preventClose bool) {
 
 // HideToTray hides the window; the app keeps running and is reachable via the
 // tray. Bound to the frontend.
-func (a *App) HideToTray() { wruntime.WindowHide(a.ctx) }
+func (a *App) HideToTray() {
+	if runtime.GOOS == "linux" {
+		// No tray on Linux (tray_stub.go): a hidden window could not be brought
+		// back, so minimise instead.
+		wruntime.WindowMinimise(a.ctx)
+		return
+	}
+	wruntime.WindowHide(a.ctx)
+}
 
 // QuitApp quits the whole app (runs shutdown → Disconnect → proxy cleanup).
 // Bound to the frontend.
@@ -309,7 +338,13 @@ func (a *App) DownloadAndInstall() error {
 	// rel.TagName is external (GitHub API JSON); filepath.Base strips any path
 	// separators so a hostile tag can't escape TempDir.
 	safeTag := filepath.Base(rel.TagName)
-	dst := filepath.Join(os.TempDir(), fmt.Sprintf("kub-connect-%s-installer.exe", safeTag))
+	// A fresh private directory: a fixed name in %TEMP% could be pre-created or
+	// swapped by another process before the elevated launch.
+	dir, err := os.MkdirTemp("", "kub-connect-update-")
+	if err != nil {
+		return fmt.Errorf("временный каталог: %w", err)
+	}
+	dst := filepath.Join(dir, fmt.Sprintf("kub-connect-%s-installer.exe", safeTag))
 	err = updater.Download(a.ctx, asset, dst, func(done, total int64) {
 		wruntime.EventsEmit(a.ctx, "update-progress", map[string]int64{"done": done, "total": total})
 	})

@@ -3,6 +3,7 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -117,5 +118,36 @@ func mustAdd(t *testing.T, svc *Service, link string) {
 	t.Helper()
 	if err := svc.AddServer(link); err != nil {
 		t.Fatalf("AddServer: %v", err)
+	}
+}
+
+func TestSetActiveServerReconnectsLiveSession(t *testing.T) {
+	svc, _, _, captured := connectReadyService(t)
+	mustAdd(t, svc, fullSampleLink)
+	if err := svc.Connect(); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	first := string(captured.XrayJSON)
+	if err := svc.SetActiveServer(1); err != nil {
+		t.Fatalf("SetActiveServer: %v", err)
+	}
+	if got := svc.GetState().Conn; got != string(ConnConnected) {
+		t.Fatalf("conn = %s, want connected", got)
+	}
+	if second := string(captured.XrayJSON); second == first || !strings.Contains(second, "203.0.113.7") {
+		t.Errorf("session was not restarted on the newly selected server: %s", second)
+	}
+}
+
+func TestRemoveActiveServerWhileConnectedErrors(t *testing.T) {
+	svc, _, _, _ := connectReadyService(t)
+	if err := svc.Connect(); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	if err := svc.RemoveServer(0); err == nil {
+		t.Fatal("RemoveServer of the connected server: expected error")
+	}
+	if n := len(svc.GetState().Servers); n != 1 {
+		t.Errorf("servers = %d, want 1 (nothing removed)", n)
 	}
 }

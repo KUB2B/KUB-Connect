@@ -36,7 +36,10 @@ make gui            # = wails build -tags "wails webkit2_41"
 
 # Headless CLI (без GUI, без CGO)
 make headless
-go run ./cmd/headless -link 'vless://...'
+XRAY_LOCATION_ASSET=data go run ./cmd/headless -link 'vless://...'
+
+# Обновить geo-базы data/*.dat из upstream (проверка SHA-256 + категорий), затем закоммитить
+make geo
 
 # Кросс-сборка Windows (нужны mingw + nsis)
 make windows
@@ -88,13 +91,16 @@ cd frontend && npm run dev     # vite dev server
   `netcfg`, `firewall`, `sysproxy`, `tun`, `wintundll`, `autostart` — паттерн
   «общий интерфейс + build-tag реализации», проверяй все варианты при правках.
 - **`internal/geoassets`** — geoip.dat/geosite.dat вшиты в бинарь
-  (`//go:embed`) и распаковываются в кэш при старте.
+  (`//go:embed`) и распаковываются в кэш при старте (заново — при смене
+  версии приложения). Файлы лежат в git; `internal/core/geodata_test.go`
+  проверяет, что в них есть все категории, на которые ссылаются правила.
 - **`internal/updater`** — проверка/скачивание релиза с GitHub, выбор
   установщика под версию ОС (обычный / Windows 7).
 - **`frontend/`** — vanilla TS + Vite, один файл `src/main.ts`, общается с Go
   через сгенерированные биндинги `frontend/wailsjs/` (регенерируются
   `wails build`/`wails dev`, изменения в них не редактировать руками).
-- **`cmd/headless`** — CLI без GUI поверх того же `internal/app`/`internal/core`.
+- **`cmd/headless`** — отладочный CLI без GUI: `xrayconf` + `tunnel` + `core`
+  напрямую, **мимо `internal/app`**, только режим Proxy. Не входит в релизы.
 
 Кросс-платформенность держится на **build tags**, а не на рантайм-ветвлении:
 для правки платформенной логики почти всегда нужно поправить несколько файлов

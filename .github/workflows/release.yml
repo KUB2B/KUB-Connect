@@ -28,7 +28,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
@@ -38,6 +38,13 @@ jobs:
           sudo apt-get install -y \
             libgtk-3-dev libwebkit2gtk-4.1-dev \
             gcc-mingw-w64-x86-64 nsis unzip
+
+      # Never publish a release the test suite rejects.
+      - name: Vet and test
+        run: |
+          go vet ./...
+          GOOS=windows go vet ./...
+          go test ./...
 
       - name: Cache wails CLI
         id: cache-wails
@@ -101,6 +108,9 @@ jobs:
           mv build/bin/kub-connect-amd64-installer.exe \
             "kub-connect-${GITHUB_REF_NAME}-windows7-amd64-installer.exe"
 
+      - name: Checksums
+        run: sha256sum kub-connect-${GITHUB_REF_NAME}-* > SHA256SUMS
+
       - name: Extract release notes from CHANGELOG.md
         run: |
           awk "/^## ${GITHUB_REF_NAME}/{found=1; next} found && /^## /{exit} found{print}" \
@@ -113,6 +123,7 @@ jobs:
             kub-connect-*-linux-amd64
             kub-connect-*-windows-amd64-installer.exe
             kub-connect-*-windows7-amd64-installer.exe
+            SHA256SUMS
           body_path: release-notes.md
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}

@@ -52,8 +52,12 @@ wails dev -tags "wails webkit2_41"
 
 ## Headless CLI
 
+Отладочный инструмент: поднимает xray для одной ссылки и выставляет системный
+SOCKS-прокси, без GUI и без сервисного слоя. Только режим Proxy — TUN есть
+только в GUI. Geo-базы берутся из `data/`:
+
 ```bash
-go run ./cmd/headless -link 'vless://...'
+XRAY_LOCATION_ASSET=data go run ./cmd/headless -link 'vless://...'
 ```
 
 ## Релизы

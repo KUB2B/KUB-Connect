@@ -1,6 +1,12 @@
 package app
 
-import "net"
+import (
+	"context"
+	"net"
+	"time"
+)
+
+const serverLookupTimeout = 3 * time.Second
 
 // resolveServerIPv4 returns the IPv4 addresses to bypass the tunnel for (so the
 // encrypted connection to the server does not loop back into the TUN). A literal
@@ -17,15 +23,17 @@ func resolveServerIPv4(host string) []string {
 		}
 		return nil // literal IPv6: nothing to bypass
 	}
-	addrs, err := net.LookupIP(host)
+	// Bounded: Connect holds the service lock while this runs, so a dead
+	// resolver must not freeze every other call for the OS default timeout.
+	ctx, cancel := context.WithTimeout(context.Background(), serverLookupTimeout)
+	defer cancel()
+	addrs, err := net.DefaultResolver.LookupIP(ctx, "ip4", host)
 	if err != nil {
 		return nil
 	}
-	var out []string
+	out := make([]string, 0, len(addrs))
 	for _, a := range addrs {
-		if ip4 := a.To4(); ip4 != nil {
-			out = append(out, ip4.String())
-		}
+		out = append(out, a.String())
 	}
 	return out
 }

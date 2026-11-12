@@ -55,9 +55,16 @@ func (linuxRouter) Up(c Config) error {
 	return nil
 }
 
+// Down removes the routes Up added. It never fails: a route that is already
+// gone is the wanted end state (the kernel drops an interface's routes when
+// the link goes down), and whatever remains on the TUN device disappears with
+// it. Returning an error here would leave the session stuck in "error" with no
+// way to disconnect or reconnect.
 func (linuxRouter) Down(c Config) error {
 	if c.FullTunnel {
-		return runAllBestEffort(linuxFullDownCommands(c))
+		_ = runAllBestEffort(linuxFullDownCommands(c))
+		return nil
 	}
-	return runAllBestEffort(downCommands(c))
+	_ = runAllBestEffort(downCommands(c))
+	return nil
 }

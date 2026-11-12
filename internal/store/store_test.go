@@ -134,3 +134,34 @@ func TestDefaultStatePendingConnectFalse(t *testing.T) {
 		t.Error("DefaultState PendingConnect should be false")
 	}
 }
+
+func TestLoadCorruptReportsBackup(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	if err := os.WriteFile(path, []byte("{not json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if s.RecoveredFrom == "" {
+		t.Fatal("RecoveredFrom should name the preserved copy")
+	}
+	if _, err := os.Stat(s.RecoveredFrom); err != nil {
+		t.Errorf("backup %s missing: %v", s.RecoveredFrom, err)
+	}
+}
+
+func TestLoadDropsNullServers(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	if err := os.WriteFile(path, []byte(`{"servers":[null],"activeServer":0,"settings":{"mode":"proxy"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(s.Servers) != 0 || s.ActiveServer != -1 {
+		t.Errorf("servers=%d active=%d, want 0 / -1", len(s.Servers), s.ActiveServer)
+	}
+}

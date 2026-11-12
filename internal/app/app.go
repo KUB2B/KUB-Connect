@@ -2,6 +2,7 @@ package app
 
 import (
 	"sync"
+	"time"
 
 	"github.com/zki/vless-client/internal/logbus"
 	"github.com/zki/vless-client/internal/store"
@@ -19,6 +20,9 @@ type Service struct {
 	connector Connector
 	tailStop  func() // cancels the log tailer goroutine; nil when not tailing
 
+	netWatchStop     func()        // cancels the network-change watcher; nil when idle
+	netWatchInterval time.Duration // poll period; zero means defaultNetWatchInterval
+
 	connSubs   map[int]func(ConnState) // conn-state fan-out (tray)
 	connNextID int
 }
@@ -29,18 +33,24 @@ func New(d Deps) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Coerce an unsupported TUN mode to proxy in memory only; the on-disk
-	// preference is preserved in case this build later runs on a TUN-capable host.
+	// Coerce an unsupported TUN mode to proxy. Not written here, but the next
+	// settings save persists it.
 	if st.Settings.Mode == store.ModeTUN && d.TUNSupported != nil && !d.TUNSupported() {
 		st.Settings.Mode = store.ModeProxy
 	}
-	return &Service{
+	s := &Service{
 		deps:     d,
 		bus:      logbus.New(2000),
 		state:    st,
 		conn:     ConnDisconnected,
 		connSubs: map[int]func(ConnState){},
-	}, nil
+	}
+	if st.RecoveredFrom != "" {
+		// Otherwise the servers just "disappear" with no explanation.
+		s.lastError = "Файл настроек был повреждён и сброшен. Копия сохранена: " + st.RecoveredFrom
+		s.bus.Append("warning: state file was corrupt and has been reset; backup: " + st.RecoveredFrom)
+	}
+	return s, nil
 }
 
 // snapshot builds a StateDTO. Caller must hold s.mu.

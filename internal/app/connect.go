@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -113,11 +115,15 @@ func (s *Service) setConn(c ConnState, errMsg string) {
 }
 
 // Connect builds the config from the active server + profile and starts the
-// capture session. Proxy mode only this phase.
+// capture session.
 func (s *Service) Connect() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.connectLocked()
+}
 
+// connectLocked is Connect for callers that already hold s.mu.
+func (s *Service) connectLocked() error {
 	if s.conn == ConnConnected || s.conn == ConnConnecting {
 		return fmt.Errorf("already %s", s.conn)
 	}
@@ -131,6 +137,7 @@ func (s *Service) Connect() error {
 		}
 		s.connector = nil
 		s.stopTailing()
+		s.stopNetWatch()
 	}
 	if s.state.ActiveServer < 0 || s.state.ActiveServer >= len(s.state.Servers) {
 		return fmt.Errorf("no active server selected")
@@ -165,6 +172,12 @@ func (s *Service) Connect() error {
 		bindIface = s.bindInterface()
 	}
 
+	// IPv6 is captured (and blackholed by xray) whenever the TUN takes the
+	// default route: the tunnel is IPv4-only, and leaving IPv6 on the physical
+	// path would let whitelisted services bypass the VPN on IPv6-enabled
+	// networks. The legacy selective host-route model leaves IPv6 alone.
+	blockIPv6 := mode == store.ModeTUN && (bindIface != "" || s.state.Profile.Full)
+
 	cfgJSON, err := xrayconf.Build(srv, s.state.Profile, xrayconf.Options{
 		SocksPort: port,
 		LogFile:   s.xrayLogPath(),
@@ -174,6 +187,7 @@ func (s *Service) Connect() error {
 		// flow. User-gated to avoid breaking vision-only servers.
 		Mux:           s.state.Settings.Mux,
 		BindInterface: bindIface,
+		BlockIPv6:     blockIPv6,
 	})
 	if err != nil {
 		s.setConn(ConnError, err.Error())
@@ -194,6 +208,7 @@ func (s *Service) Connect() error {
 		cc.TunPrefix = tunPrefix
 		cc.RouteCIDRs = tunRouteCIDRs(s.state.Profile)
 		cc.ServerIPs = resolveServerIPv4(srv.Host)
+		cc.BlockIPv6 = blockIPv6
 		switch {
 		case bindIface != "":
 			// Full-capture model: split-default routes steer all IPv4 into the
@@ -201,7 +216,6 @@ func (s *Service) Connect() error {
 			// outbounds are bound to bindIface. Domain-based rules (geosite,
 			// presets, custom domains) work in both routing modes.
 			cc.FullTunnel = true
-			cc.BlockIPv6 = s.state.Profile.Full
 			if len(cc.ServerIPs) == 0 {
 				s.bus.Append("warning: could not resolve server IP for bypass route")
 			}
@@ -209,7 +223,6 @@ func (s *Service) Connect() error {
 			// Legacy full tunnel without a bound interface: direct exceptions
 			// (RU напрямую, свои исключения) would loop — warn loudly.
 			cc.FullTunnel = true
-			cc.BlockIPv6 = true
 			cc.RouteCIDRs = nil
 			s.bus.Append("warning: physical interface unknown — direct exceptions may loop; disable 'RU напрямую' if browsing breaks")
 			if len(cc.ServerIPs) == 0 {
@@ -231,6 +244,13 @@ func (s *Service) Connect() error {
 				s.bus.Append("note: kill switch not supported on this OS — continuing without it")
 			}
 		}
+	}
+
+	// xray appends to its log file and the tailer reads it from the start, so
+	// without this every connect would replay all earlier sessions into the log
+	// view and the file would grow without bound.
+	if err := os.Truncate(s.xrayLogPath(), 0); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		s.bus.Append("warning: truncate xray log: " + err.Error())
 	}
 
 	conn, err := s.deps.Factory(cc)
@@ -255,6 +275,9 @@ func (s *Service) Connect() error {
 	}
 
 	s.startTailing()
+	if bindIface != "" {
+		s.startNetWatch(bindIface)
+	}
 	s.bus.Append("connected")
 	s.setConn(ConnConnected, "")
 	return nil
@@ -264,7 +287,11 @@ func (s *Service) Connect() error {
 func (s *Service) Disconnect() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.disconnectLocked()
+}
 
+// disconnectLocked is Disconnect for callers that already hold s.mu.
+func (s *Service) disconnectLocked() error {
 	if s.connector == nil {
 		s.setConn(ConnDisconnected, "")
 		return nil
@@ -278,6 +305,7 @@ func (s *Service) Disconnect() error {
 	}
 	s.connector = nil
 	s.stopTailing()
+	s.stopNetWatch()
 	s.bus.Append("disconnected")
 	s.setConn(ConnDisconnected, "")
 	return nil

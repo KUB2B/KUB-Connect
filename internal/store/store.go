@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/zki/vless-client/internal/routing"
@@ -68,6 +69,9 @@ type State struct {
 	// new instance auto-connects once, regardless of the AutoConnect setting.
 	// Cleared after it is consumed on startup.
 	PendingConnect bool `json:"pendingConnect"`
+	// RecoveredFrom is set by Load (never persisted) when the state file was
+	// unreadable and defaults were substituted: the path of the preserved copy.
+	RecoveredFrom string `json:"-"`
 }
 
 // DefaultState returns the initial state for a fresh install.
@@ -131,9 +135,16 @@ func Load(path string) (*State, error) {
 		// Save's atomic rename prevents new torn files; this also recovers files
 		// left by older versions that wrote directly to state.json.
 		backup := fmt.Sprintf("%s.corrupt-%s", path, time.Now().Format("20060102T150405.000000000"))
-		_ = os.Rename(path, backup)
-		return DefaultState(), nil
+		def := DefaultState()
+		if os.Rename(path, backup) == nil {
+			def.RecoveredFrom = backup
+		} else {
+			def.RecoveredFrom = path
+		}
+		return def, nil
 	}
+	// A hand-edited file may hold null entries; they would crash every reader.
+	s.Servers = slices.DeleteFunc(s.Servers, func(c *vless.ServerConfig) bool { return c == nil })
 	if s.Settings.Mode != ModeTUN && s.Settings.Mode != ModeProxy {
 		s.Settings.Mode = ModeTUN
 	}
