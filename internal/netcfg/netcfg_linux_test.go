@@ -40,3 +40,13 @@ func TestSupportedLinux(t *testing.T) {
 		t.Fatal("Supported() = false on linux, want true")
 	}
 }
+
+// Routes that are already gone (interface went down, network changed) must not
+// turn a disconnect into an error. The device does not exist, so every command
+// fails whether or not the test runs as root.
+func TestLinuxDownIgnoresMissingRoutes(t *testing.T) {
+	c := Config{Device: "kubtest-absent0", TunIP: "198.18.0.1", Prefix: 30, RouteCIDRs: []string{"203.0.113.0/24"}}
+	if err := New().Down(c); err != nil {
+		t.Errorf("Down with nothing to remove = %v, want nil", err)
+	}
+}
