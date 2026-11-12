@@ -34,13 +34,19 @@ func New(d Deps) (*Service, error) {
 	if st.Settings.Mode == store.ModeTUN && d.TUNSupported != nil && !d.TUNSupported() {
 		st.Settings.Mode = store.ModeProxy
 	}
-	return &Service{
+	s := &Service{
 		deps:     d,
 		bus:      logbus.New(2000),
 		state:    st,
 		conn:     ConnDisconnected,
 		connSubs: map[int]func(ConnState){},
-	}, nil
+	}
+	if st.RecoveredFrom != "" {
+		// Otherwise the servers just "disappear" with no explanation.
+		s.lastError = "Файл настроек был повреждён и сброшен. Копия сохранена: " + st.RecoveredFrom
+		s.bus.Append("warning: state file was corrupt and has been reset; backup: " + st.RecoveredFrom)
+	}
+	return s, nil
 }
 
 // snapshot builds a StateDTO. Caller must hold s.mu.
