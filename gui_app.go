@@ -126,7 +126,7 @@ func (a *App) startup(ctx context.Context) {
 
 	// Diagnostic: capture tun2socks engine logs (per-connection lines, device
 	// read errors) to tun.log, since the GUI process has no usable stderr.
-	if f, err := os.OpenFile(filepath.Join(logDir, "tun.log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644); err != nil {
+	if f, err := os.OpenFile(filepath.Join(logDir, "tun.log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600); err != nil {
 		log.Printf("tun log: %v", err)
 	} else {
 		tun.SetLogWriter(f)

@@ -26,6 +26,9 @@ TUN — режим полного перехвата трафика через �
 - `internal/firewall` — kill switch, **только Linux** (nftables): дропает
   вайтлистнутый трафик, если он не идёт через TUN-интерфейс (fail-closed на
   случай падения tun2socks).
+  Защищает **только IP-CIDR** (`tunRouteCIDRs`: Telegram + свои IP): доменные
+  пресеты и свои домены под правило не попадают — их адреса заранее
+  неизвестны. В full-tunnel и на Windows недоступен (переключатель скрыт).
 - `internal/xrayconf` — loop-guard: блокирует исходящие в TUN-подсеть
   (`routing.TUNReservedCIDR`), чтобы xray не редиалил сам себя через
   on-link-маршрут адаптера.

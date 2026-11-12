@@ -1,4 +1,4 @@
-# VLESS Client build targets.
+# KUB Connect build targets.
 #
 # Version flows from the git tag (override with `make VER=v0.1.0 <target>`).
 # Build scripts live in scripts/; this Makefile is a thin, discoverable wrapper.
@@ -57,7 +57,7 @@ tag: ## Create the git tag for the current VER (e.g. make VER=v0.1.0 tag)
 .PHONY: publish
 publish: ## Publish build/release/* to a GitHub release for VER (run after builds + QA)
 	gh release create $(VER) build/release/* \
-	  --title "VLESS Client $(VER)" --notes-file CHANGELOG.md
+	  --title "KUB Connect $(VER)" --notes-file CHANGELOG.md
 
 ## --- Assets / cleanup ---
 

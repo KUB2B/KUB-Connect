@@ -33,8 +33,8 @@ func New(d Deps) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Coerce an unsupported TUN mode to proxy in memory only; the on-disk
-	// preference is preserved in case this build later runs on a TUN-capable host.
+	// Coerce an unsupported TUN mode to proxy. Not written here, but the next
+	// settings save persists it.
 	if st.Settings.Mode == store.ModeTUN && d.TUNSupported != nil && !d.TUNSupported() {
 		st.Settings.Mode = store.ModeProxy
 	}
