@@ -124,8 +124,10 @@ type tlsSettings struct {
 }
 
 type wsSettings struct {
-	Path    string            `json:"path"`
-	Headers map[string]string `json:"headers,omitempty"`
+	Path string `json:"path"`
+	// Host is the WebSocket Host header. xray deprecated passing it through
+	// "headers" in favour of this field.
+	Host string `json:"host,omitempty"`
 }
 
 type grpcSettings struct {
@@ -235,11 +237,7 @@ func buildProxyOutbound(s *vless.ServerConfig, mux bool) (outbound, error) {
 	}
 	switch s.Network {
 	case vless.NetworkWS:
-		ws := &wsSettings{Path: orDefault(s.Path, "/")}
-		if s.WsHost != "" {
-			ws.Headers = map[string]string{"Host": s.WsHost}
-		}
-		stream.WSSettings = ws
+		stream.WSSettings = &wsSettings{Path: orDefault(s.Path, "/"), Host: s.WsHost}
 	case vless.NetworkGRPC:
 		stream.GRPCSettings = &grpcSettings{ServiceName: s.ServiceName}
 	}

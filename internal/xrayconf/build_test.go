@@ -300,3 +300,23 @@ func TestBuildBlockIPv6(t *testing.T) {
 		t.Errorf("rule[1] = %v, want block ::/0", second)
 	}
 }
+
+func TestBuildWebSocketHost(t *testing.T) {
+	srv := sampleServer()
+	srv.Network = vless.NetworkWS
+	srv.Security = vless.SecurityTLS
+	srv.Flow = ""
+	srv.Path = "/ws"
+	srv.WsHost = "cdn.example.com"
+	data, err := Build(srv, routing.Default(), Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(data)
+	if !strings.Contains(s, `"wsSettings":{"path":"/ws","host":"cdn.example.com"}`) {
+		t.Errorf("ws host must be the dedicated field, not a header: %s", s)
+	}
+	if strings.Contains(s, `"headers"`) {
+		t.Errorf("ws config must not use headers for Host (deprecated in xray): %s", s)
+	}
+}
