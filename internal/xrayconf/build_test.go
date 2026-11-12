@@ -2,6 +2,7 @@ package xrayconf
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -270,5 +271,32 @@ func TestBuildBindInterface(t *testing.T) {
 	}
 	if strings.Contains(string(data), "sockopt") {
 		t.Error("sockopt must be absent when BindInterface is empty")
+	}
+}
+
+func TestBuildBlockIPv6(t *testing.T) {
+	rulesOf := func(opts Options) []any {
+		t.Helper()
+		data, err := Build(sampleServer(), routing.Profile{Telegram: true}, opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var cfg map[string]any
+		if err := json.Unmarshal(data, &cfg); err != nil {
+			t.Fatal(err)
+		}
+		return cfg["routing"].(map[string]any)["rules"].([]any)
+	}
+
+	// Whitelist rules carry no IPv6 block of their own.
+	if s := fmt.Sprint(rulesOf(Options{})); strings.Contains(s, "::/0") {
+		t.Errorf("whitelist config without BlockIPv6 must not block IPv6: %s", s)
+	}
+
+	// With the option: loop guard first, IPv6 block second, before any direct rule.
+	rules := rulesOf(Options{BlockIPv6: true})
+	second := rules[1].(map[string]any)
+	if second["outboundTag"] != "block" || fmt.Sprint(second["ip"]) != "[::/0]" {
+		t.Errorf("rule[1] = %v, want block ::/0", second)
 	}
 }

@@ -418,8 +418,13 @@ func TestConnectTUNWhitelistFullCaptureWithBind(t *testing.T) {
 	if !captured.FullTunnel {
 		t.Error("whitelist + bind interface must use full-capture (FullTunnel)")
 	}
-	if captured.BlockIPv6 {
-		t.Error("whitelist mode must not block IPv6")
+	// IPv6 must be captured and blackholed, otherwise whitelisted services
+	// leave over IPv6 around the VPN on IPv6-enabled networks.
+	if !captured.BlockIPv6 {
+		t.Error("full-capture whitelist must capture IPv6 (BlockIPv6)")
+	}
+	if !strings.Contains(string(captured.XrayJSON), `"::/0"`) {
+		t.Errorf("xray JSON missing the IPv6 block rule: %s", captured.XrayJSON)
 	}
 	if len(captured.ServerIPs) == 0 {
 		t.Error("ServerIPs bypass should be populated")

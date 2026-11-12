@@ -30,6 +30,13 @@ type Options struct {
 	// routed back into the TUN by the split-default routes and looping. Empty
 	// leaves the sockets unbound.
 	BindInterface string
+	// BlockIPv6 blackholes every IPv6 destination. Set in TUN mode whenever
+	// IPv6 is captured into the TUN (netcfg BlockIPv6): the tunnel path is
+	// IPv4-only, so a captured IPv6 connection is refused quickly and the
+	// application falls back to IPv4, where the routing rules apply. Without
+	// the capture an IPv6-enabled host would send whitelisted services straight
+	// out over IPv6, bypassing the VPN.
+	BlockIPv6 bool
 }
 
 type xrayConfig struct {
@@ -177,7 +184,7 @@ func Build(s *vless.ServerConfig, p routing.Profile, opts Options) ([]byte, erro
 		},
 		Routing: routingConf{
 			DomainStrategy: "IPIfNonMatch",
-			Rules:          withLoopGuard(toRuleJSON(p.Rules())),
+			Rules:          withGuards(toRuleJSON(p.Rules()), opts.BlockIPv6),
 		},
 	}
 	return json.Marshal(cfg)
@@ -263,6 +270,19 @@ func withLoopGuard(rules []ruleJSON) []ruleJSON {
 		IP:          []string{routing.TUNReservedCIDR},
 	}
 	return append([]ruleJSON{guard}, rules...)
+}
+
+// withGuards prepends the unconditional guard rules: the TUN loop guard and,
+// when blockIPv6 is set, an IPv6 blackhole (see Options.BlockIPv6).
+func withGuards(rules []ruleJSON, blockIPv6 bool) []ruleJSON {
+	if blockIPv6 {
+		rules = append([]ruleJSON{{
+			Type:        "field",
+			OutboundTag: routing.OutboundBlock,
+			IP:          []string{"::/0"},
+		}}, rules...)
+	}
+	return withLoopGuard(rules)
 }
 
 func toRuleJSON(rules []routing.Rule) []ruleJSON {

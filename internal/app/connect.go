@@ -165,6 +165,12 @@ func (s *Service) Connect() error {
 		bindIface = s.bindInterface()
 	}
 
+	// IPv6 is captured (and blackholed by xray) whenever the TUN takes the
+	// default route: the tunnel is IPv4-only, and leaving IPv6 on the physical
+	// path would let whitelisted services bypass the VPN on IPv6-enabled
+	// networks. The legacy selective host-route model leaves IPv6 alone.
+	blockIPv6 := mode == store.ModeTUN && (bindIface != "" || s.state.Profile.Full)
+
 	cfgJSON, err := xrayconf.Build(srv, s.state.Profile, xrayconf.Options{
 		SocksPort: port,
 		LogFile:   s.xrayLogPath(),
@@ -174,6 +180,7 @@ func (s *Service) Connect() error {
 		// flow. User-gated to avoid breaking vision-only servers.
 		Mux:           s.state.Settings.Mux,
 		BindInterface: bindIface,
+		BlockIPv6:     blockIPv6,
 	})
 	if err != nil {
 		s.setConn(ConnError, err.Error())
@@ -194,6 +201,7 @@ func (s *Service) Connect() error {
 		cc.TunPrefix = tunPrefix
 		cc.RouteCIDRs = tunRouteCIDRs(s.state.Profile)
 		cc.ServerIPs = resolveServerIPv4(srv.Host)
+		cc.BlockIPv6 = blockIPv6
 		switch {
 		case bindIface != "":
 			// Full-capture model: split-default routes steer all IPv4 into the
@@ -201,7 +209,6 @@ func (s *Service) Connect() error {
 			// outbounds are bound to bindIface. Domain-based rules (geosite,
 			// presets, custom domains) work in both routing modes.
 			cc.FullTunnel = true
-			cc.BlockIPv6 = s.state.Profile.Full
 			if len(cc.ServerIPs) == 0 {
 				s.bus.Append("warning: could not resolve server IP for bypass route")
 			}
@@ -209,7 +216,6 @@ func (s *Service) Connect() error {
 			// Legacy full tunnel without a bound interface: direct exceptions
 			// (RU напрямую, свои исключения) would loop — warn loudly.
 			cc.FullTunnel = true
-			cc.BlockIPv6 = true
 			cc.RouteCIDRs = nil
 			s.bus.Append("warning: physical interface unknown — direct exceptions may loop; disable 'RU напрямую' if browsing breaks")
 			if len(cc.ServerIPs) == 0 {
