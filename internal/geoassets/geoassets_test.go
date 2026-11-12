@@ -14,7 +14,7 @@ func TestSyncWritesNamedFiles(t *testing.T) {
 	}
 	dst := t.TempDir()
 
-	if err := Sync(fsys, "data", dst, []string{"geoip.dat", "geosite.dat"}); err != nil {
+	if err := Sync(fsys, "data", dst, "", []string{"geoip.dat", "geosite.dat"}); err != nil {
 		t.Fatalf("Sync: %v", err)
 	}
 
@@ -45,7 +45,7 @@ func TestSyncSkipsWhenSizeMatches(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Sync(fsys, "data", dst, []string{"geoip.dat"}); err != nil {
+	if err := Sync(fsys, "data", dst, "", []string{"geoip.dat"}); err != nil {
 		t.Fatalf("Sync: %v", err)
 	}
 
@@ -68,7 +68,7 @@ func TestSyncRewritesWhenSizeDiffers(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Sync(fsys, "data", dst, []string{"geoip.dat"}); err != nil {
+	if err := Sync(fsys, "data", dst, "", []string{"geoip.dat"}); err != nil {
 		t.Fatalf("Sync: %v", err)
 	}
 
@@ -85,7 +85,42 @@ func TestSyncMissingEmbeddedFileErrors(t *testing.T) {
 	fsys := fstest.MapFS{}
 	dst := t.TempDir()
 
-	if err := Sync(fsys, "data", dst, []string{"geoip.dat"}); err == nil {
+	if err := Sync(fsys, "data", dst, "", []string{"geoip.dat"}); err == nil {
 		t.Fatal("expected error for missing embedded file, got nil")
+	}
+}
+
+func TestSyncRewritesSameSizeFileOnVersionChange(t *testing.T) {
+	dst := t.TempDir()
+	path := filepath.Join(dst, "geoip.dat")
+	read := func() string {
+		t.Helper()
+		b, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	sync := func(data, version string) {
+		t.Helper()
+		fsys := fstest.MapFS{"data/geoip.dat": {Data: []byte(data)}}
+		if err := Sync(fsys, "data", dst, version, []string{"geoip.dat"}); err != nil {
+			t.Fatalf("Sync: %v", err)
+		}
+	}
+
+	sync("AAAAA", "v1")
+	// Same version, same size: the cache is trusted (no 30MB rewrite per start).
+	if err := os.WriteFile(path, []byte("XXXXX"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sync("AAAAA", "v1")
+	if got := read(); got != "XXXXX" {
+		t.Errorf("same version rewrote the file: %q", got)
+	}
+	// New version ships a database of the same size: it must replace the old one.
+	sync("BBBBB", "v2")
+	if got := read(); got != "BBBBB" {
+		t.Errorf("after a version change got %q, want the new contents", got)
 	}
 }

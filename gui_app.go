@@ -109,7 +109,7 @@ func (a *App) startup(ctx context.Context) {
 		}
 		if dir, err := geoassets.DefaultDir(); err != nil {
 			log.Printf("geo asset dir: %v", err)
-		} else if err := geoassets.Sync(geoAssets, "data", dir, []string{"geoip.dat", "geosite.dat"}); err != nil {
+		} else if err := geoassets.Sync(geoAssets, "data", dir, version, []string{"geoip.dat", "geosite.dat"}); err != nil {
 			log.Printf("geo assets: %v", err)
 		} else {
 			_ = os.Setenv("XRAY_LOCATION_ASSET", dir)
