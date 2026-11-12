@@ -61,6 +61,10 @@ publish: ## Publish build/release/* to a GitHub release for VER (run after build
 
 ## --- Assets / cleanup ---
 
+.PHONY: geo
+geo: ## Refresh data/geoip.dat + geosite.dat from upstream (verify, then commit)
+	scripts/fetch-geo.sh
+
 .PHONY: icon
 icon: ## Regenerate the Windows .ico from build/appicon.png (needs ImageMagick)
 	convert build/appicon.png -define icon:auto-resize=256,128,64,48,32,16 build/windows/icon.ico

@@ -38,6 +38,9 @@ make gui            # = wails build -tags "wails webkit2_41"
 make headless
 XRAY_LOCATION_ASSET=data go run ./cmd/headless -link 'vless://...'
 
+# Обновить geo-базы data/*.dat из upstream (проверка SHA-256 + категорий), затем закоммитить
+make geo
+
 # Кросс-сборка Windows (нужны mingw + nsis)
 make windows
 # Windows 7 (патченный тулчейн XTLS go-win7, см. scripts/fetch-go-win7.sh)
@@ -88,7 +91,9 @@ cd frontend && npm run dev     # vite dev server
   `netcfg`, `firewall`, `sysproxy`, `tun`, `wintundll`, `autostart` — паттерн
   «общий интерфейс + build-tag реализации», проверяй все варианты при правках.
 - **`internal/geoassets`** — geoip.dat/geosite.dat вшиты в бинарь
-  (`//go:embed`) и распаковываются в кэш при старте.
+  (`//go:embed`) и распаковываются в кэш при старте (заново — при смене
+  версии приложения). Файлы лежат в git; `internal/core/geodata_test.go`
+  проверяет, что в них есть все категории, на которые ссылаются правила.
 - **`internal/updater`** — проверка/скачивание релиза с GitHub, выбор
   установщика под версию ОС (обычный / Windows 7).
 - **`frontend/`** — vanilla TS + Vite, один файл `src/main.ts`, общается с Go
