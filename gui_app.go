@@ -88,6 +88,16 @@ func (a *App) startup(ctx context.Context) {
 		log.Printf("cleared stale system proxy left by a previous run")
 	}
 
+	// Same idea for the kill switch: a crash in TUN mode leaves the firewall
+	// table behind (routes die with the TUN device, the drop rule does not), so
+	// whitelisted IPs stay blocked. Off is idempotent and a no-op where the kill
+	// switch is unsupported. Removing the table needs root.
+	if privilege.IsElevated() {
+		if err := firewall.New().Off(); err != nil {
+			log.Printf("clear stale kill switch: %v", err)
+		}
+	}
+
 	// Geo databases are comparatively large. Prepare them in parallel with
 	// loading state so the frontend can display saved servers immediately. Any
 	// operation that starts xray waits for startupReady below.
