@@ -70,6 +70,13 @@ TUN — режим полного перехвата трафика через �
   остаются заблокированными. `App.startup` вызывает `firewall.Off()` при
   запуске с правами root (без root таблицу не удалить — только
   `sudo nft delete table inet vless_killswitch`).
+- **Смена сети при активном TUN**: сокеты xray привязаны к интерфейсу,
+  который был default в момент подключения. `internal/app/netwatch.go` раз в
+  5 с сверяет имя default-интерфейса и при смене (Wi-Fi ↔ Ethernet)
+  переподключается под тем же `s.mu` (`disconnectLocked` + `connectLocked`).
+  Пропавший default route сменой не считается — ждём возвращения. Смена
+  шлюза на том же интерфейсе не отслеживается, неудачное переподключение не
+  повторяется.
 - **Консоль netsh мелькает**: подпроцессы `netsh` запускать с
   `SysProcAttr{HideWindow, CreationFlags: CREATE_NO_WINDOW}` на Windows.
 - **PowerShell при включении TUN**: поиск физического default route выполняется
