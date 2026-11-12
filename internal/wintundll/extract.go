@@ -11,6 +11,7 @@
 package wintundll
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -26,15 +27,16 @@ func DefaultDir() (string, error) {
 }
 
 // extract writes data to destDir/name, returning the full path. The file is
-// written only when missing or size-mismatched, matching the geoassets policy
-// so repeated launches don't rewrite the DLL needlessly.
+// rewritten unless its contents already equal data. A size check is not enough
+// here: destDir is user-writable and the DLL is loaded into an elevated
+// process, so a same-size replacement must not be accepted.
 func extract(data []byte, destDir, name string) (string, error) {
 	if err := os.MkdirAll(destDir, 0o755); err != nil {
 		return "", fmt.Errorf("mkdir %s: %w", destDir, err)
 	}
 	dst := filepath.Join(destDir, name)
-	if fi, err := os.Stat(dst); err == nil && fi.Size() == int64(len(data)) {
-		return dst, nil // already present
+	if cur, err := os.ReadFile(dst); err == nil && bytes.Equal(cur, data) {
+		return dst, nil // already present and genuine
 	}
 	if err := os.WriteFile(dst, data, 0o644); err != nil {
 		return "", fmt.Errorf("write %s: %w", dst, err)

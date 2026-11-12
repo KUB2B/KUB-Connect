@@ -118,6 +118,10 @@ Section
 
     !insertmacro wails.files
 
+    ; Wintun driver DLL for TUN mode. Installed beside the exe (admin-only
+    ; directory) so the elevated app never loads it from a user-writable cache.
+    File "/oname=wintun.dll" "..\..\..\internal\wintundll\wintun_amd64.dll"
+
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
     CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
 
