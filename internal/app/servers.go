@@ -36,6 +36,10 @@ func (s *Service) RemoveServer(index int) error {
 	if index < 0 || index >= len(s.state.Servers) {
 		return fmt.Errorf("server index %d out of range", index)
 	}
+	// The running session would keep using a server that no longer exists.
+	if index == s.state.ActiveServer && s.connector != nil {
+		return fmt.Errorf("сервер используется — сначала отключитесь")
+	}
 	prevServers := append([]*vless.ServerConfig(nil), s.state.Servers...)
 	prevActive := s.state.ActiveServer
 	s.state.Servers = append(s.state.Servers[:index], s.state.Servers[index+1:]...)
@@ -56,7 +60,8 @@ func (s *Service) RemoveServer(index int) error {
 	return nil
 }
 
-// SetActiveServer selects the active server by index.
+// SetActiveServer selects the active server by index. When connected, the
+// session is restarted on the newly selected server.
 func (s *Service) SetActiveServer(index int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -70,5 +75,13 @@ func (s *Service) SetActiveServer(index int) error {
 		return err
 	}
 	s.emitState()
+	// Switch a live session over; otherwise the UI shows the new server as
+	// active while traffic still flows through the old one.
+	if index != prev && s.conn == ConnConnected {
+		if err := s.disconnectLocked(); err != nil {
+			return err
+		}
+		return s.connectLocked()
+	}
 	return nil
 }
