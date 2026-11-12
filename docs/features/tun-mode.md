@@ -57,6 +57,19 @@ TUN — режим полного перехвата трафика через �
   умолчанию выключен — требует, чтобы клиент на сервере не использовал
   `flow: xtls-rprx-vision`, несовместим с mux) резко снижает число реальных
   соединений к серверу.
+- **IPv6 мимо туннеля**: туннель только IPv4. Когда TUN забирает default route
+  (full-capture: есть привязка к физическому интерфейсу или включён
+  full-tunnel), IPv6 тоже заворачивается в TUN (`netcfg.Config.BlockIPv6`), а
+  xray его блокирует правилом `block ::/0` сразу после loop-guard
+  (`xrayconf.Options.BlockIPv6`). Иначе на сети с IPv6 браузер идёт по AAAA
+  напрямую, и пресеты/свои домены/Telegram обходят VPN. Приложения
+  откатываются на IPv4. В legacy selective-модели (интерфейс не определён)
+  IPv6 не трогается.
+- **Остатки kill switch после падения**: маршруты исчезают вместе с
+  TUN-адаптером, а таблица nft `vless_killswitch` — нет, и вайтлистнутые IP
+  остаются заблокированными. `App.startup` вызывает `firewall.Off()` при
+  запуске с правами root (без root таблицу не удалить — только
+  `sudo nft delete table inet vless_killswitch`).
 - **Консоль netsh мелькает**: подпроцессы `netsh` запускать с
   `SysProcAttr{HideWindow, CreationFlags: CREATE_NO_WINDOW}` на Windows.
 - **PowerShell при включении TUN**: поиск физического default route выполняется
