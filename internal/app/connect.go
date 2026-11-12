@@ -115,11 +115,15 @@ func (s *Service) setConn(c ConnState, errMsg string) {
 }
 
 // Connect builds the config from the active server + profile and starts the
-// capture session. Proxy mode only this phase.
+// capture session.
 func (s *Service) Connect() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.connectLocked()
+}
 
+// connectLocked is Connect for callers that already hold s.mu.
+func (s *Service) connectLocked() error {
 	if s.conn == ConnConnected || s.conn == ConnConnecting {
 		return fmt.Errorf("already %s", s.conn)
 	}
@@ -133,6 +137,7 @@ func (s *Service) Connect() error {
 		}
 		s.connector = nil
 		s.stopTailing()
+		s.stopNetWatch()
 	}
 	if s.state.ActiveServer < 0 || s.state.ActiveServer >= len(s.state.Servers) {
 		return fmt.Errorf("no active server selected")
@@ -270,6 +275,9 @@ func (s *Service) Connect() error {
 	}
 
 	s.startTailing()
+	if bindIface != "" {
+		s.startNetWatch(bindIface)
+	}
 	s.bus.Append("connected")
 	s.setConn(ConnConnected, "")
 	return nil
@@ -279,7 +287,11 @@ func (s *Service) Connect() error {
 func (s *Service) Disconnect() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.disconnectLocked()
+}
 
+// disconnectLocked is Disconnect for callers that already hold s.mu.
+func (s *Service) disconnectLocked() error {
 	if s.connector == nil {
 		s.setConn(ConnDisconnected, "")
 		return nil
@@ -293,6 +305,7 @@ func (s *Service) Disconnect() error {
 	}
 	s.connector = nil
 	s.stopTailing()
+	s.stopNetWatch()
 	s.bus.Append("disconnected")
 	s.setConn(ConnDisconnected, "")
 	return nil

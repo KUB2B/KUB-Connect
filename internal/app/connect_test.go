@@ -5,7 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/zki/vless-client/internal/routing"
 	"github.com/zki/vless-client/internal/store"
@@ -510,5 +512,63 @@ func TestConnectTruncatesXrayLog(t *testing.T) {
 	}
 	if len(data) != 0 {
 		t.Errorf("xray.log not truncated on connect: %q", data)
+	}
+}
+
+func TestNetworkChangeReconnects(t *testing.T) {
+	svc, _ := bindDeps(t, "eth0")
+	var iface atomic.Value
+	iface.Store("eth0")
+	svc.deps.DefaultInterface = func() (string, error) { return iface.Load().(string), nil }
+	var starts atomic.Int32
+	inner := svc.deps.Factory
+	svc.deps.Factory = func(c ConnConfig) (Connector, error) {
+		starts.Add(1)
+		return inner(c)
+	}
+	svc.netWatchInterval = 5 * time.Millisecond
+	mustAdd(t, svc, fullSampleLink)
+	if err := svc.Connect(); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	t.Cleanup(func() { _ = svc.Disconnect() })
+
+	// Same interface: no reconnect.
+	time.Sleep(40 * time.Millisecond)
+	if n := starts.Load(); n != 1 {
+		t.Fatalf("sessions started with an unchanged interface = %d, want 1", n)
+	}
+
+	iface.Store("wlan0")
+	deadline := time.Now().Add(2 * time.Second)
+	for starts.Load() < 2 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	time.Sleep(40 * time.Millisecond) // a second, spurious reconnect would show up here
+	if n := starts.Load(); n != 2 {
+		t.Fatalf("sessions started after one interface change = %d, want 2", n)
+	}
+	if got := svc.GetState().Conn; got != string(ConnConnected) {
+		t.Errorf("conn after reconnect = %s, want connected", got)
+	}
+}
+
+func TestDisconnectStopsNetworkWatch(t *testing.T) {
+	svc, _ := bindDeps(t, "eth0")
+	var iface atomic.Value
+	iface.Store("eth0")
+	svc.deps.DefaultInterface = func() (string, error) { return iface.Load().(string), nil }
+	svc.netWatchInterval = 5 * time.Millisecond
+	mustAdd(t, svc, fullSampleLink)
+	if err := svc.Connect(); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	if err := svc.Disconnect(); err != nil {
+		t.Fatalf("Disconnect: %v", err)
+	}
+	iface.Store("wlan0")
+	time.Sleep(40 * time.Millisecond)
+	if got := svc.GetState().Conn; got != string(ConnDisconnected) {
+		t.Errorf("conn = %s after a user disconnect, want disconnected (watcher must not reconnect)", got)
 	}
 }

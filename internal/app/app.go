@@ -2,6 +2,7 @@ package app
 
 import (
 	"sync"
+	"time"
 
 	"github.com/zki/vless-client/internal/logbus"
 	"github.com/zki/vless-client/internal/store"
@@ -18,6 +19,9 @@ type Service struct {
 	lastError string
 	connector Connector
 	tailStop  func() // cancels the log tailer goroutine; nil when not tailing
+
+	netWatchStop     func()        // cancels the network-change watcher; nil when idle
+	netWatchInterval time.Duration // poll period; zero means defaultNetWatchInterval
 
 	connSubs   map[int]func(ConnState) // conn-state fan-out (tray)
 	connNextID int
