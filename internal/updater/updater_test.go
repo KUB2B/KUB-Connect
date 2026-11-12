@@ -2,6 +2,8 @@ package updater
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -99,7 +101,7 @@ func TestDownload(t *testing.T) {
 	defer srv.Close()
 
 	dst := filepath.Join(t.TempDir(), "out.exe")
-	a := Asset{Name: "x-installer.exe", URL: srv.URL, Size: int64(len(body))}
+	a := Asset{Name: "x-installer.exe", URL: srv.URL, Size: int64(len(body)), Digest: digestOf(body)}
 
 	var lastDone, lastTotal int64
 	var calls int
@@ -133,12 +135,42 @@ func TestDownloadSizeMismatchRemovesFile(t *testing.T) {
 	defer srv.Close()
 
 	dst := filepath.Join(t.TempDir(), "out.exe")
-	a := Asset{Name: "x-installer.exe", URL: srv.URL, Size: int64(len(body)) + 1} // wrong size
+	a := Asset{Name: "x-installer.exe", URL: srv.URL, Size: int64(len(body)) + 1, Digest: digestOf(body)} // wrong size
 
 	if err := Download(context.Background(), a, dst, nil); err == nil {
 		t.Fatal("Download: expected size-mismatch error, got nil")
 	}
 	if _, err := os.Stat(dst); !os.IsNotExist(err) {
 		t.Error("Download: partial file should be removed on size mismatch")
+	}
+}
+
+func digestOf(b []byte) string {
+	sum := sha256.Sum256(b)
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+func TestDownloadRejectsBadOrMissingDigest(t *testing.T) {
+	body := []byte("installer")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write(body)
+	}))
+	defer srv.Close()
+
+	for name, digest := range map[string]string{
+		"missing":  "",
+		"mismatch": digestOf([]byte("something else")),
+		"not sha":  "md5:abcdef",
+	} {
+		t.Run(name, func(t *testing.T) {
+			dst := filepath.Join(t.TempDir(), "out.exe")
+			a := Asset{Name: "x-installer.exe", URL: srv.URL, Size: int64(len(body)), Digest: digest}
+			if err := Download(context.Background(), a, dst, nil); err == nil {
+				t.Fatal("Download: expected a digest error, got nil")
+			}
+			if _, err := os.Stat(dst); !os.IsNotExist(err) {
+				t.Error("Download: file must not be left behind")
+			}
+		})
 	}
 }

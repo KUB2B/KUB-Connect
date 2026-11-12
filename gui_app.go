@@ -320,7 +320,13 @@ func (a *App) DownloadAndInstall() error {
 	// rel.TagName is external (GitHub API JSON); filepath.Base strips any path
 	// separators so a hostile tag can't escape TempDir.
 	safeTag := filepath.Base(rel.TagName)
-	dst := filepath.Join(os.TempDir(), fmt.Sprintf("kub-connect-%s-installer.exe", safeTag))
+	// A fresh private directory: a fixed name in %TEMP% could be pre-created or
+	// swapped by another process before the elevated launch.
+	dir, err := os.MkdirTemp("", "kub-connect-update-")
+	if err != nil {
+		return fmt.Errorf("временный каталог: %w", err)
+	}
+	dst := filepath.Join(dir, fmt.Sprintf("kub-connect-%s-installer.exe", safeTag))
 	err = updater.Download(a.ctx, asset, dst, func(done, total int64) {
 		wruntime.EventsEmit(a.ctx, "update-progress", map[string]int64{"done": done, "total": total})
 	})

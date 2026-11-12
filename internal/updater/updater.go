@@ -2,6 +2,8 @@ package updater
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -19,6 +21,9 @@ type Asset struct {
 	Name string `json:"name"`
 	URL  string `json:"browser_download_url"`
 	Size int64  `json:"size"`
+	// Digest is the asset checksum GitHub computes on upload, "sha256:<hex>".
+	// Download refuses an asset without it: the installer runs elevated.
+	Digest string `json:"digest"`
 }
 
 type Release struct {
@@ -72,6 +77,9 @@ func CheckLatest() (Release, error) {
 		return Release{}, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return Release{}, fmt.Errorf("github releases: HTTP %d", resp.StatusCode)
+	}
 	var r Release
 	if err := json.NewDecoder(resp.Body).Decode(&r); err != nil {
 		return Release{}, err
@@ -113,14 +121,21 @@ func (w *progressWriter) Write(p []byte) (int, error) {
 
 // Download streams the asset to dst over HTTPS, calling progress(done, total)
 // as bytes arrive (progress may be nil). total is the response Content-Length,
-// falling back to a.Size when the server omits it. On any error, or when the
-// written size disagrees with a known a.Size, the partial file is removed.
+// falling back to a.Size when the server omits it. The file is kept only when
+// its SHA-256 matches a.Digest; on any error, a size mismatch, or a missing or
+// wrong digest the partial file is removed.
 func Download(ctx context.Context, a Asset, dst string, progress func(done, total int64)) error {
+	want, ok := strings.CutPrefix(a.Digest, "sha256:")
+	if !ok || want == "" {
+		return fmt.Errorf("download %s: release has no sha256 digest", a.Name)
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, a.URL, nil)
 	if err != nil {
 		return err
 	}
-	resp, err := http.DefaultClient.Do(req)
+	// Bounded so a stalled connection cannot hang the update forever.
+	client := &http.Client{Timeout: 15 * time.Minute}
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
@@ -139,7 +154,8 @@ func Download(ctx context.Context, a Asset, dst string, progress func(done, tota
 		return err
 	}
 	pw := &progressWriter{total: total, cb: progress}
-	written, copyErr := io.Copy(f, io.TeeReader(resp.Body, pw))
+	sum := sha256.New()
+	written, copyErr := io.Copy(io.MultiWriter(f, sum), io.TeeReader(resp.Body, pw))
 	closeErr := f.Close()
 	if copyErr != nil {
 		os.Remove(dst)
@@ -152,6 +168,10 @@ func Download(ctx context.Context, a Asset, dst string, progress func(done, tota
 	if a.Size > 0 && written != a.Size {
 		os.Remove(dst)
 		return fmt.Errorf("download %s: size mismatch got %d want %d", a.Name, written, a.Size)
+	}
+	if got := hex.EncodeToString(sum.Sum(nil)); !strings.EqualFold(got, want) {
+		os.Remove(dst)
+		return fmt.Errorf("download %s: sha256 mismatch", a.Name)
 	}
 	return nil
 }
