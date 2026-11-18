@@ -33,6 +33,7 @@ Unicode true
 ## Include the wails tools
 ####
 !include "wails_tools.nsh"
+!include "kub_oscheck.nsh"
 
 # The version information for this two must consist of 4 parts
 VIProductVersion "${INFO_PRODUCTVERSION}.0"
@@ -92,7 +93,7 @@ ShowInstDetails show # This will always show the installation details.
 !macroend
 
 Function .onInit
-   !insertmacro wails.checkArchitecture
+   !insertmacro kub.checkWindows
 
    ; Detect existing installation and offer upgrade
    SetRegView 64

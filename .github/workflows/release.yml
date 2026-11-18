@@ -98,6 +98,7 @@ jobs:
         run: |
           command -v makensis >/dev/null || { echo "::error::makensis missing (apt install nsis)"; exit 1; }
           scripts/fetch-go-win7.sh
+          export KUB_WIN7=1 # installer skips its Win10+ check (kub_oscheck.nsh)
           export GOROOT="$PWD/.go-win7"
           export PATH="$GOROOT/bin:$PATH"
           go version

@@ -34,6 +34,7 @@ sed -i -E \
 SUFFIX="windows"
 if [ "${WIN7:-0}" = "1" ]; then
   SUFFIX="windows7"
+  export KUB_WIN7=1 # installer skips its Win10+ check (kub_oscheck.nsh)
   scripts/fetch-go-win7.sh
   GOROOT="$(cd "${GO_WIN7_DIR:-.go-win7}" && pwd)"
   export GOROOT
