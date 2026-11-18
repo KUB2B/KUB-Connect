@@ -10,6 +10,19 @@
 
 Список «Исключения — всегда мимо VPN» действует в обоих режимах.
 
+## Пресеты сервисов
+
+`routing.Presets` — фиксированный список, UI строит чекбоксы из него сам.
+У пресета есть `Domains` (geosite) и опционально `IPs` (geoip/CIDR) — для
+трафика без домена, например звонков WhatsApp (`geoip:facebook`, все IP
+Meta). `internal/core/geodata_test.go` проверяет, что все категории пресетов
+есть в вшитых `data/*.dat`.
+
+По умолчанию включены Telegram и пресет `whatsapp` (`routing.Default()`).
+Чтобы включить пресет у уже существующих пользователей, используется
+одноразовая миграция в `store.Load` по полю `State.ProfileVersion`
+(`profileVersion` в `store.go`): поднять номер и добавить условие.
+
 ## Приоритет правил xray
 
 `category-ru`/`geoip:ru` → direct (форсировано) → `geoip:private` → direct →

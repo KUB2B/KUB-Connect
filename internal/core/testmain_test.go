@@ -42,6 +42,12 @@ func TestMain(m *testing.M) {
 					{Type: router.Domain_Domain, Value: "youtube.com"},
 				},
 			},
+			{
+				CountryCode: "WHATSAPP",
+				Domain: []*router.Domain{
+					{Type: router.Domain_Domain, Value: "whatsapp.net"},
+				},
+			},
 		},
 	}
 	geositeBytes, err := proto.Marshal(geosite)
@@ -71,6 +77,10 @@ func TestMain(m *testing.M) {
 			{
 				CountryCode: "TELEGRAM",
 				Cidr:        []*router.CIDR{ipv4CIDR("149.154.160.0", 20)},
+			},
+			{
+				CountryCode: "FACEBOOK",
+				Cidr:        []*router.CIDR{ipv4CIDR("157.240.0.0", 16)},
 			},
 		},
 	}

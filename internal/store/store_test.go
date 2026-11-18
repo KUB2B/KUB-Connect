@@ -165,3 +165,31 @@ func TestLoadDropsNullServers(t *testing.T) {
 		t.Errorf("servers=%d active=%d, want 0 / -1", len(s.Servers), s.ActiveServer)
 	}
 }
+
+func TestLoadMigratesWhatsAppOnce(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	// Old file (no profileVersion): WhatsApp gets switched on, other presets kept.
+	if err := os.WriteFile(path, []byte(`{"profile":{"ProxyPresets":["youtube"]}}`), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	s, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := s.Profile.ProxyPresets; len(got) != 2 || got[0] != "youtube" || got[1] != "whatsapp" {
+		t.Fatalf("ProxyPresets = %v, want [youtube whatsapp]", got)
+	}
+
+	// User unticks WhatsApp after the migration: it must stay off.
+	s.Profile.ProxyPresets = []string{"youtube"}
+	if err := Save(path, s); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	s, err = Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := s.Profile.ProxyPresets; len(got) != 1 || got[0] != "youtube" {
+		t.Errorf("ProxyPresets = %v, want [youtube] (migration must not repeat)", got)
+	}
+}
