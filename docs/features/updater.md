@@ -39,3 +39,16 @@ HTTP-статус кроме 200 (например, 403 при rate limit).
 XTLS go-win7, см. `scripts/fetch-go-win7.sh`). `version` (`version.go`)
 прошивается через `-ldflags "-X main.version=$(VER)"`, `VER` — из
 `git describe --tags`.
+
+## Проверка версии Windows в установщике
+
+`build/windows/installer/kub_oscheck.nsh` (`kub.checkWindows`) заменяет
+`wails.checkArchitecture`. Wails проверял `${AtLeastWin10}`, а это
+версия, которую процессу сообщает Windows. Режим совместимости
+(например, `~ WIN7RTM` в `HKCU\...\AppCompatFlags\Layers` на
+`kub-connect.exe`) наследуется установщиком, запущенным из приложения, и на
+Windows 11 он видел «Windows 7» → «only supported on Windows 10». Теперь
+версия читается из `CurrentMajorVersionNumber` в реестре (не подменяется,
+есть только на Win10+). Win7-установщик собирается с `KUB_WIN7=1` в
+окружении (`scripts/build-windows.sh`, `release.yml`) и проверку версии
+пропускает. `wails_tools.nsh` не править — перегенерируется при сборке.
