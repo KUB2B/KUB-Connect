@@ -130,6 +130,20 @@
       },
       {
         "type": "field",
+        "outboundTag": "proxy",
+        "domain": [
+          "geosite:whatsapp"
+        ]
+      },
+      {
+        "type": "field",
+        "outboundTag": "proxy",
+        "ip": [
+          "geoip:facebook"
+        ]
+      },
+      {
+        "type": "field",
         "outboundTag": "direct",
         "network": "tcp,udp"
       }

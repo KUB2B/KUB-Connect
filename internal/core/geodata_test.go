@@ -49,6 +49,13 @@ func TestShippedGeoDataHasRequiredCategories(t *testing.T) {
 	}
 
 	wantIPs := map[string]bool{"RU": true, "PRIVATE": true}
+	for _, p := range routing.Presets {
+		for _, ip := range p.IPs {
+			if name, ok := strings.CutPrefix(ip, "geoip:"); ok {
+				wantIPs[strings.ToUpper(name)] = true
+			}
+		}
+	}
 	raw, err = os.ReadFile(filepath.Join(dir, "geoip.dat"))
 	if err != nil {
 		t.Skipf("no geoip.dat in %s: %v", dir, err)

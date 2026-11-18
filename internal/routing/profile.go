@@ -39,11 +39,13 @@ var TelegramCIDRs = []string{
 
 // Preset is a bundled service routed through the VPN when selected in
 // whitelist mode. Domains are xray domain-rule entries (geosite: categories
-// from the shipped geosite.dat).
+// from the shipped geosite.dat); IPs are xray ip-rule entries (geoip:
+// categories or CIDRs) for traffic that never carries a domain, e.g. calls.
 type Preset struct {
 	Key     string
 	Title   string
 	Domains []string
+	IPs     []string
 }
 
 // Presets is the fixed set of service presets offered in the UI. Keys are
@@ -53,6 +55,7 @@ var Presets = []Preset{
 	{Key: "instagram", Title: "Instagram", Domains: []string{"geosite:instagram"}},
 	{Key: "facebook", Title: "Facebook", Domains: []string{"geosite:facebook"}},
 	{Key: "twitter", Title: "Twitter / X", Domains: []string{"geosite:twitter"}},
+	{Key: "whatsapp", Title: "WhatsApp", Domains: []string{"geosite:whatsapp"}, IPs: []string{"geoip:facebook"}}, // ponytail: geoip:facebook = all Meta IPs (WhatsApp calls go to bare IPs)
 	{Key: "discord", Title: "Discord", Domains: []string{"geosite:discord"}},
 	{Key: "netflix", Title: "Netflix", Domains: []string{"geosite:netflix"}},
 	{Key: "spotify", Title: "Spotify", Domains: []string{"geosite:spotify"}},
@@ -87,16 +90,16 @@ type Profile struct {
 	CustomDirectIPs     []string
 }
 
-// presetDomains aggregates the domain entries of the selected presets,
+// presetMatches aggregates the domain and IP entries of the selected presets,
 // silently skipping unknown keys (stale state after a preset is removed).
-func (p Profile) presetDomains() []string {
-	var domains []string
+func (p Profile) presetMatches() (domains, ips []string) {
 	for _, key := range p.ProxyPresets {
 		if preset, ok := PresetByKey(key); ok {
 			domains = append(domains, preset.Domains...)
+			ips = append(ips, preset.IPs...)
 		}
 	}
-	return domains
+	return domains, ips
 }
 
 // directExceptions returns the user's bypass rules, emitted first so they win
@@ -145,8 +148,12 @@ func (p Profile) Rules() []Rule {
 			Rule{Outbound: OutboundProxy, IPs: TelegramCIDRs},
 		)
 	}
-	if domains := p.presetDomains(); len(domains) > 0 {
+	domains, ips := p.presetMatches()
+	if len(domains) > 0 {
 		rules = append(rules, Rule{Outbound: OutboundProxy, Domains: domains})
+	}
+	if len(ips) > 0 {
+		rules = append(rules, Rule{Outbound: OutboundProxy, IPs: ips})
 	}
 	if len(p.CustomProxyDomains) > 0 {
 		rules = append(rules, Rule{Outbound: OutboundProxy, Domains: p.CustomProxyDomains})
@@ -182,7 +189,8 @@ func (p Profile) fullRules() []Rule {
 	return rules
 }
 
-// Default returns the shipped default profile: Telegram on, RU forced direct.
+// Default returns the shipped default profile: Telegram and WhatsApp on, RU
+// forced direct.
 func Default() Profile {
-	return Profile{Telegram: true, ForceRUDirect: true}
+	return Profile{Telegram: true, ForceRUDirect: true, ProxyPresets: []string{"whatsapp"}}
 }

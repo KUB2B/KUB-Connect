@@ -149,6 +149,16 @@ func TestRulesPresetsAndDirectExceptions(t *testing.T) {
 	}
 }
 
+func TestRulesPresetIPs(t *testing.T) {
+	rules := Profile{ProxyPresets: []string{"whatsapp"}}.Rules()
+	for _, r := range rules {
+		if r.Outbound == OutboundProxy && contains(r.IPs, "geoip:facebook") {
+			return
+		}
+	}
+	t.Error("whatsapp preset must emit geoip:facebook -> proxy (calls go to bare IPs)")
+}
+
 func TestFullRulesDirectExceptionsFirst(t *testing.T) {
 	p := Profile{Full: true, CustomDirectDomains: []string{"gosuslugi.ru"}}
 	rules := p.Rules()

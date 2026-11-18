@@ -69,18 +69,27 @@ type State struct {
 	// new instance auto-connects once, regardless of the AutoConnect setting.
 	// Cleared after it is consumed on startup.
 	PendingConnect bool `json:"pendingConnect"`
+	// ProfileVersion counts one-shot profile migrations applied by Load
+	// (see profileVersion). Missing in files from older versions (= 0).
+	ProfileVersion int `json:"profileVersion"`
 	// RecoveredFrom is set by Load (never persisted) when the state file was
 	// unreadable and defaults were substituted: the path of the preserved copy.
 	RecoveredFrom string `json:"-"`
 }
 
+// profileVersion is the current profile migration level:
+//
+//	1 — WhatsApp preset switched on for everyone (it became a default).
+const profileVersion = 1
+
 // DefaultState returns the initial state for a fresh install.
 func DefaultState() *State {
 	return &State{
-		Servers:      nil,
-		ActiveServer: -1,
-		Profile:      routing.Default(),
-		Settings:     Settings{Mode: ModeTUN, LogLevel: LogNormal},
+		Servers:        nil,
+		ActiveServer:   -1,
+		Profile:        routing.Default(),
+		Settings:       Settings{Mode: ModeTUN, LogLevel: LogNormal},
+		ProfileVersion: profileVersion,
 	}
 }
 
@@ -154,6 +163,11 @@ func Load(path string) (*State, error) {
 		s.ActiveServer = 0
 	}
 	s.Settings.LogLevel = NormalizeLogLevel(s.Settings.LogLevel)
+	// One-shot: once bumped and saved, a user who unticks WhatsApp keeps it off.
+	if s.ProfileVersion < 1 && !slices.Contains(s.Profile.ProxyPresets, "whatsapp") {
+		s.Profile.ProxyPresets = append(s.Profile.ProxyPresets, "whatsapp")
+	}
+	s.ProfileVersion = profileVersion
 	return &s, nil
 }
 
